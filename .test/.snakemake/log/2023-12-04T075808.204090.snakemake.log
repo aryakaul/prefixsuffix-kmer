@@ -1,0 +1,4 @@
+WorkflowError in file /n/data1/hms/dbmi/baym/arya/projects/prefixsuffix-kmer/workflow/Snakefile, line 17:
+Failed to open source file /n/data1/hms/dbmi/baym/arya/projects/prefixsuffix-kmer/workflow/rules/cuttlefish.smk
+FileNotFoundError: [Errno 2] No such file or directory: '/n/data1/hms/dbmi/baym/arya/projects/prefixsuffix-kmer/workflow/rules/cuttlefish.smk'
+  File "/n/data1/hms/dbmi/baym/arya/projects/prefixsuffix-kmer/workflow/Snakefile", line 17, in <module>

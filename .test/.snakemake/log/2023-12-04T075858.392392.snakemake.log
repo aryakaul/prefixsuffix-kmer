@@ -1,0 +1,4 @@
+SyntaxError:
+Input and output files have to be specified as strings or lists of strings.
+  File "/n/data1/hms/dbmi/baym/arya/projects/prefixsuffix-kmer/workflow/Snakefile", line 17, in <module>
+  File "/n/data1/hms/dbmi/baym/arya/projects/prefixsuffix-kmer/workflow/rules/bwa.smk", line 9, in <module>
