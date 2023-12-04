@@ -1,0 +1,50 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cores: 32
+Rules claiming more threads will be scaled down.
+Job stats:
+job                           count
+--------------------------  -------
+add_colorinfo_to_gfa              1
+all                               1
+build_sqldb                       1
+decompose_redundant_colors        1
+find_colored_deletions            1
+total                             5
+
+Select jobs to execute...
+
+[Sat Dec  2 16:09:14 2023]
+rule decompose_redundant_colors:
+    input: intermediate/minimalcuts/test_minimalcuts_k19, intermediate/cuttlefish/test_redundantcolors_k19.csv
+    output: intermediate/minimalcuts/test_unitig2cuts_k19
+    jobid: 4
+    reason: Missing output files: intermediate/minimalcuts/test_unitig2cuts_k19
+    wildcards: batch=test
+    resources: tmpdir=/tmp
+
+
+        /n/data1/hms/dbmi/baym/arya/projects/phylogeny-colored-dbg/workflow/rules/../scripts/map_unitigs-to-cuts \
+            intermediate/cuttlefish/test_redundantcolors_k19.csv \
+            intermediate/minimalcuts/test_minimalcuts_k19 \
+            intermediate/minimalcuts/test_unitig2cuts_k19
+        
+Activating conda environment: ../.conda/54440981434b8dd14a8e84efa023631c_
+[Sat Dec  2 16:09:14 2023]
+Error in rule decompose_redundant_colors:
+    jobid: 4
+    input: intermediate/minimalcuts/test_minimalcuts_k19, intermediate/cuttlefish/test_redundantcolors_k19.csv
+    output: intermediate/minimalcuts/test_unitig2cuts_k19
+    conda-env: /n/data1/hms/dbmi/baym/arya/projects/phylogeny-colored-dbg/.conda/54440981434b8dd14a8e84efa023631c_
+    shell:
+        
+        /n/data1/hms/dbmi/baym/arya/projects/phylogeny-colored-dbg/workflow/rules/../scripts/map_unitigs-to-cuts \
+            intermediate/cuttlefish/test_redundantcolors_k19.csv \
+            intermediate/minimalcuts/test_minimalcuts_k19 \
+            intermediate/minimalcuts/test_unitig2cuts_k19
+        
+        (one of the commands exited with non-zero exit code; note that snakemake uses bash strict mode!)
+
+Shutting down, this might take some time.
+Exiting because a job execution failed. Look above for error message
+Complete log: .snakemake/log/2023-12-02T160908.862855.snakemake.log

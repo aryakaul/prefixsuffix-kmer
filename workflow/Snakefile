@@ -1,0 +1,32 @@
+from snakemake.utils import min_version
+import sys
+
+
+min_version("6.2.0")
+
+shell.prefix("set -euo pipefail")
+
+
+report: "report/workflow.rst"
+
+
+##### Target rules #####
+
+
+include: "rules/init.smk"
+include: "rules/bwa.smk"
+
+
+## WILDCARDS CONSTRAINS
+wildcard_constraints:
+    sample=r"[a-zA-Z0-9_-]+",
+    batch=r"[a-zA-Z0-9_-]+",
+
+
+rule all:
+    input:
+        expand(fn_pcdbg(_batch="{batch}"), batch=get_batches()),
+        expand(fn_deletionbubbles(_batch="{batch}"), batch=get_batches()),
+
+
+##### Modules #####

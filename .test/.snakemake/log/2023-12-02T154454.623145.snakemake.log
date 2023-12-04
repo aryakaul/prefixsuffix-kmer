@@ -1,0 +1,220 @@
+Building DAG of jobs...
+Creating conda environment ../workflow/envs/bubblegun.yml...
+Downloading and installing remote packages.
+Environment for /n/data1/hms/dbmi/baym/arya/projects/phylogeny-colored-dbg/workflow/rules/../envs/bubblegun.yml created (location: ../.conda/dcf339872bc2992793ea24bebb82cc38_)
+Creating conda environment ../workflow/envs/pandas.yml...
+Downloading and installing remote packages.
+Environment for /n/data1/hms/dbmi/baym/arya/projects/phylogeny-colored-dbg/workflow/rules/../envs/pandas.yml created (location: ../.conda/54440981434b8dd14a8e84efa023631c_)
+Creating conda environment ../workflow/envs/ete3.yml...
+Downloading and installing remote packages.
+Environment for /n/data1/hms/dbmi/baym/arya/projects/phylogeny-colored-dbg/workflow/rules/../envs/ete3.yml created (location: ../.conda/0182ead36213f3e6ae1326ad293f2be3_)
+Creating conda environment ../workflow/envs/cuttlefish.yml...
+Downloading and installing remote packages.
+Environment for /n/data1/hms/dbmi/baym/arya/projects/phylogeny-colored-dbg/workflow/rules/../envs/cuttlefish.yml created (location: ../.conda/adcf7e14dc594fe6eb08193b70aec1d8_)
+Using shell: /usr/bin/bash
+Provided cores: 32
+Rules claiming more threads will be scaled down.
+Job stats:
+job                           count
+--------------------------  -------
+add_colorinfo_to_gfa              1
+all                               1
+build_sqldb                       1
+decompose_redundant_colors        1
+find_colored_deletions            1
+mergeredundantcolors              1
+minimal_cuts_percolorset          1
+run_bubblegun                     1
+run_cuttlefish                    1
+symlink_nwk_tree                  1
+tree_postprocessing               1
+unitig_sample_matrix_gfa1         1
+total                            12
+
+Select jobs to execute...
+
+[Sat Dec  2 15:52:22 2023]
+rule symlink_nwk_tree:
+    input: input/test.nwk
+    output: intermediate/tree/test.nwk_dirty
+    jobid: 7
+    reason: Missing output files: intermediate/tree/test.nwk_dirty
+    wildcards: batch=test
+    resources: tmpdir=/tmp
+
+
+        ln -sf ../../input/test.nwk intermediate/tree/test.nwk_dirty
+        
+
+[Sat Dec  2 15:52:22 2023]
+rule run_cuttlefish:
+    input: input/test.txt
+    output: intermediate/cuttlefish/test_compcoloreddbg_k19.gfa1, intermediate/cuttlefish/test_compcoloreddbg_k19.json
+    jobid: 3
+    reason: Missing output files: intermediate/cuttlefish/test_compcoloreddbg_k19.gfa1
+    wildcards: batch=test
+    resources: tmpdir=/tmp
+
+
+        ulimit -n 2048
+        OUTPUTDIR=$(dirname intermediate/cuttlefish/test_compcoloreddbg_k19.gfa1)
+        mkdir -p $OUTPUTDIR
+        cuttlefish build                 -l input/test.txt                 -k 19                 -f 1                 -o $(dirname intermediate/cuttlefish/test_compcoloreddbg_k19.gfa1)/$(basename intermediate/cuttlefish/test_compcoloreddbg_k19.gfa1 .gfa1)
+        
+Activating conda environment: ../.conda/adcf7e14dc594fe6eb08193b70aec1d8_
+[Sat Dec  2 15:52:22 2023]
+Finished job 7.
+1 of 12 steps (8%) done
+Select jobs to execute...
+
+[Sat Dec  2 15:52:22 2023]
+rule tree_postprocessing:
+    input: intermediate/tree/test.nwk_dirty
+    output: intermediate/tree/test.nwk, intermediate/tree/test.leaves, intermediate/tree/test.nodes
+    jobid: 6
+    reason: Missing output files: intermediate/tree/test.nwk; Input files updated by another job: intermediate/tree/test.nwk_dirty
+    wildcards: batch=test
+    resources: tmpdir=/tmp
+
+
+        /n/data1/hms/dbmi/baym/arya/projects/phylogeny-colored-dbg/workflow/rules/../scripts/postprocess_tree.py \
+            --standardize \
+            --midpoint-outgroup \
+            --name-internals \
+            --ladderize \
+            -l intermediate/tree/test.leaves \
+            -n intermediate/tree/test.nodes \
+            intermediate/tree/test.nwk_dirty intermediate/tree/test.nwk
+        
+Activating conda environment: ../.conda/0182ead36213f3e6ae1326ad293f2be3_
+[Sat Dec  2 15:52:26 2023]
+Finished job 6.
+2 of 12 steps (17%) done
+[Sat Dec  2 15:52:54 2023]
+Finished job 3.
+3 of 12 steps (25%) done
+Select jobs to execute...
+
+[Sat Dec  2 15:52:54 2023]
+rule unitig_sample_matrix_gfa1:
+    input: intermediate/cuttlefish/test_compcoloreddbg_k19.gfa1, input/test.txt
+    output: intermediate/cuttlefish/test_unitigcolors_k19.tsv
+    jobid: 9
+    reason: Missing output files: intermediate/cuttlefish/test_unitigcolors_k19.tsv; Input files updated by another job: intermediate/cuttlefish/test_compcoloreddbg_k19.gfa1
+    wildcards: batch=test
+    resources: tmpdir=/tmp
+
+
+        /n/data1/hms/dbmi/baym/arya/projects/phylogeny-colored-dbg/workflow/rules/../scripts/generate_unitig_colormatrix_cuttlefish_gfa1 \
+            intermediate/cuttlefish/test_compcoloreddbg_k19.gfa1 \
+            input/test.txt \
+            intermediate/cuttlefish/test_unitigcolors_k19.tsv
+        
+Activating conda environment: ../.conda/54440981434b8dd14a8e84efa023631c_
+
+[Sat Dec  2 15:52:54 2023]
+rule run_bubblegun:
+    input: intermediate/cuttlefish/test_compcoloreddbg_k19.gfa1
+    output: intermediate/bubblegun/test_k19_bubbles.json, intermediate/bubblegun/test_k19_bubbles.log
+    jobid: 11
+    reason: Missing output files: intermediate/bubblegun/test_k19_bubbles.json; Input files updated by another job: intermediate/cuttlefish/test_compcoloreddbg_k19.gfa1
+    wildcards: batch=test
+    resources: tmpdir=/tmp
+
+
+        mkdir -p $(dirname intermediate/bubblegun/test_k19_bubbles.json intermediate/bubblegun/test_k19_bubbles.log)
+        BubbleGun \
+            -g intermediate/cuttlefish/test_compcoloreddbg_k19.gfa1 \
+            --log_file intermediate/bubblegun/test_k19_bubbles.log \
+            bchains \
+            --bubble_json intermediate/bubblegun/test_k19_bubbles.json \
+        
+Activating conda environment: ../.conda/dcf339872bc2992793ea24bebb82cc38_
+[Sat Dec  2 15:52:55 2023]
+Finished job 11.
+4 of 12 steps (33%) done
+[Sat Dec  2 15:52:56 2023]
+Finished job 9.
+5 of 12 steps (42%) done
+Select jobs to execute...
+
+[Sat Dec  2 15:52:56 2023]
+rule mergeredundantcolors:
+    input: intermediate/cuttlefish/test_unitigcolors_k19.tsv
+    output: intermediate/cuttlefish/test_uqcolors_k19.tsv, intermediate/cuttlefish/test_redundantcolors_k19.csv
+    jobid: 8
+    reason: Missing output files: intermediate/cuttlefish/test_uqcolors_k19.tsv, intermediate/cuttlefish/test_redundantcolors_k19.csv; Input files updated by another job: intermediate/cuttlefish/test_unitigcolors_k19.tsv
+    wildcards: batch=test
+    resources: tmpdir=/tmp
+
+
+        /n/data1/hms/dbmi/baym/arya/projects/phylogeny-colored-dbg/workflow/rules/../scripts/uqcolorvectors_from_mtx \
+            intermediate/cuttlefish/test_unitigcolors_k19.tsv \
+            intermediate/cuttlefish/test_uqcolors_k19.tsv \
+            intermediate/cuttlefish/test_redundantcolors_k19.csv
+        
+Activating conda environment: ../.conda/54440981434b8dd14a8e84efa023631c_
+[Sat Dec  2 15:53:00 2023]
+Finished job 8.
+6 of 12 steps (50%) done
+Select jobs to execute...
+
+[Sat Dec  2 15:53:00 2023]
+rule minimal_cuts_percolorset:
+    input: intermediate/tree/test.nwk, intermediate/cuttlefish/test_uqcolors_k19.tsv
+    output: intermediate/minimalcuts/test_minimalcuts_k19
+    jobid: 5
+    reason: Missing output files: intermediate/minimalcuts/test_minimalcuts_k19; Input files updated by another job: intermediate/tree/test.nwk, intermediate/cuttlefish/test_uqcolors_k19.tsv
+    wildcards: batch=test
+    resources: tmpdir=/tmp
+
+
+        mkdir -p $(dirname intermediate/minimalcuts/test_minimalcuts_k19)
+        /n/data1/hms/dbmi/baym/arya/projects/phylogeny-colored-dbg/workflow/rules/../scripts/minimal_cuts \
+            intermediate/tree/test.nwk \
+            intermediate/cuttlefish/test_uqcolors_k19.tsv \
+            -o intermediate/minimalcuts/test_minimalcuts_k19 \
+            -v \
+            --all \
+            -cs 5000
+        
+Activating conda environment: ../.conda/0182ead36213f3e6ae1326ad293f2be3_
+[Sat Dec  2 15:53:03 2023]
+Finished job 5.
+7 of 12 steps (58%) done
+Select jobs to execute...
+
+[Sat Dec  2 15:53:03 2023]
+rule decompose_redundant_colors:
+    input: intermediate/minimalcuts/test_minimalcuts_k19, intermediate/cuttlefish/test_redundantcolors_k19.csv
+    output: intermediate/minimalcuts/test_unitig2cuts_k19
+    jobid: 4
+    reason: Missing output files: intermediate/minimalcuts/test_unitig2cuts_k19; Input files updated by another job: intermediate/minimalcuts/test_minimalcuts_k19, intermediate/cuttlefish/test_redundantcolors_k19.csv
+    wildcards: batch=test
+    resources: tmpdir=/tmp
+
+
+        /n/data1/hms/dbmi/baym/arya/projects/phylogeny-colored-dbg/workflow/rules/../scripts/map_unitigs-to-cuts \
+            intermediate/cuttlefish/test_redundantcolors_k19.csv \
+            intermediate/minimalcuts/test_minimalcuts_k19 \
+            intermediate/minimalcuts/test_unitig2cuts_k19
+        
+Activating conda environment: ../.conda/54440981434b8dd14a8e84efa023631c_
+[Sat Dec  2 15:53:04 2023]
+Error in rule decompose_redundant_colors:
+    jobid: 4
+    input: intermediate/minimalcuts/test_minimalcuts_k19, intermediate/cuttlefish/test_redundantcolors_k19.csv
+    output: intermediate/minimalcuts/test_unitig2cuts_k19
+    conda-env: /n/data1/hms/dbmi/baym/arya/projects/phylogeny-colored-dbg/.conda/54440981434b8dd14a8e84efa023631c_
+    shell:
+        
+        /n/data1/hms/dbmi/baym/arya/projects/phylogeny-colored-dbg/workflow/rules/../scripts/map_unitigs-to-cuts \
+            intermediate/cuttlefish/test_redundantcolors_k19.csv \
+            intermediate/minimalcuts/test_minimalcuts_k19 \
+            intermediate/minimalcuts/test_unitig2cuts_k19
+        
+        (one of the commands exited with non-zero exit code; note that snakemake uses bash strict mode!)
+
+Shutting down, this might take some time.
+Exiting because a job execution failed. Look above for error message
+Complete log: .snakemake/log/2023-12-02T154454.623145.snakemake.log
