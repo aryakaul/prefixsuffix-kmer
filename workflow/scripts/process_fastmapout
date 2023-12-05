@@ -21,7 +21,7 @@ def parse_fastmap_output(file_path):
                 logger.debug(f"Mappings found for {seq_id}")
                 parts = line.split()
                 num_mappings = int(parts[3])
-                mappings = parts[4 : 4 + num_mappings]
+                mappings = parts[4:4 + num_mappings]
                 logger.debug(f"{num_mappings} mappings found for {seq_id}")
                 for mapping in mappings:
                     contigid, location = mapping.split(":")
@@ -32,7 +32,8 @@ def parse_fastmap_output(file_path):
                     parsed_data.append([seq_id, "Null", "Null"])
                 seq_id = None
             if parsed_kmers % 2000000 == 0:
-                logger.info(f"Parsed {int(parsed_kmers/2)} prefix/suffix kmers!")
+                logger.info(
+                    f"Parsed {int(parsed_kmers/2)} prefix/suffix kmers!")
     return parsed_data
 
 
@@ -46,7 +47,8 @@ def write_to_tsv(data, output):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Extract k-mer sequences from a genome based on a provided locus tag and TSV file."
+        description=
+        "Extract k-mer sequences from a genome based on a provided locus tag and TSV file."
     )
 
     parser.add_argument(
@@ -72,7 +74,8 @@ def main():
         "--verbose",
         action="count",
         default=0,
-        help="Increase verbosity level. Can be specified multiple times for more detailed logs.",
+        help=
+        "Increase verbosity level. Can be specified multiple times for more detailed logs.",
     )
 
     # Parse the arguments

@@ -1,8 +1,8 @@
 rule makebwaidx:
     output:
-        bwaindex=fn_idxpersample(_sample="{sample}")
+        bwaindex=fn_idxpersample(_sample="{sample}"),
     input:
-        sample=fn_sample(_sample="{sample}") 
+        sample=fn_sample(_sample="{sample}"),
     conda:
         "../envs/bwamem.yml"
     shell:
@@ -10,14 +10,15 @@ rule makebwaidx:
         bwa index {input}
         """
 
+
 rule fastmap:
     output:
-        bwafastmap=fn_fastmapraw(_sample="{sample}")
+        bwafastmap=fn_fastmapraw(_sample="{sample}"),
     input:
         prefsuffkmers=fn_prefsuffkmer(_gene="{gene}"),
-        sample=fn_sample(_sample="{sample}")
+        sample=fn_sample(_sample="{sample}"),
     params:
-        kmer_length=config['kmer_length']
+        kmer_length=config["kmer_length"],
     conda:
         "../envs/bwamem.yml"
     shell:
