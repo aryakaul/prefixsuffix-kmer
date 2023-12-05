@@ -11,6 +11,7 @@ configfile: "config.yaml"
 
 ##### load config and sample sheets #####
 
+
 def dir_input():
     return Path(config["input_dir"])
 
@@ -89,24 +90,31 @@ def fn_tree_dirty(_batch):
 def fn_leaves_sorted(_batch):
     return f"{dir_intermediate()}/tree/{_batch}.leaves"
 
+
 def fn_nodes_sorted(_batch):
     return f"{dir_intermediate()}/tree/{_batch}.nodes"
+
 
 #####################################
 # Files for individual samples      #
 #####################################
 
+
 def fn_idxpersample(_sample):
     pass
+
 
 def fn_sample(_sample):
     pass
 
+
 def fn_fastmapraw(_sample):
     pass
 
+
 def fn_prefsuffkmer(_gene):
     pass
+
 
 ## WILDCARD FUNCTIONS
 

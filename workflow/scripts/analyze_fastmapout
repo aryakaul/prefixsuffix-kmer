@@ -16,14 +16,15 @@ def write_distances(group, file):
         for _, suffix_row in suffix_df.iterrows():
             prefix_loc = prefix_row['Location']
             suffix_loc = suffix_row['Location']
-            if prefix_row["Contig"] == suffix_row["Contig"] and prefix_row['Contig'] != "Null":
+            if prefix_row["Contig"] == suffix_row["Contig"] and prefix_row[
+                    'Contig'] != "Null":
                 distance = abs(
-                    int(suffix_row["Location"]) - int(prefix_row["Location"])
-                )
+                    int(suffix_row["Location"]) - int(prefix_row["Location"]))
             else:
                 if prefix_row['Contig'] != suffix_row['Contig']:
                     distance = "ContigsDifferent"
-                if prefix_row['Contig'] == "Null" or suffix_row['Contig'] == "Null":
+                if prefix_row['Contig'] == "Null" or suffix_row[
+                        'Contig'] == "Null":
                     distance = "KmerNotFound"
             file.write(
                 f"{prefix_row['GeneID']}\t{prefix_row['kmerID']}\t{suffix_row['kmerID']}\t{prefix_row['Contig']}\t{distance}\t{prefix_loc}\t{suffix_loc}\n"
@@ -32,7 +33,8 @@ def write_distances(group, file):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Extract k-mer sequences from a genome based on a provided locus tag and TSV file."
+        description=
+        "Extract k-mer sequences from a genome based on a provided locus tag and TSV file."
     )
 
     parser.add_argument(
@@ -58,7 +60,8 @@ def main():
         "--verbose",
         action="count",
         default=0,
-        help="Increase verbosity level. Can be specified multiple times for more detailed logs.",
+        help=
+        "Increase verbosity level. Can be specified multiple times for more detailed logs.",
     )
 
     # Parse the arguments
@@ -74,10 +77,13 @@ def main():
         logger.add(sys.stderr, level="DEBUG")
 
     df = pd.read_csv(args.input, sep="\t")
-    df[["GeneID", "KmerType"]] = df["kmerID"].str.rsplit("_", n=3, expand=True)[[0, 1]]
+    df[["GeneID", "KmerType"]] = df["kmerID"].str.rsplit("_", n=3,
+                                                         expand=True)[[0, 1]]
 
     with open(args.output, "w") as file:
-        file.write("GeneID\tPrefix\tSuffix\tContig\tDistance\tPrefixLocation\tSuffixLocation\n")  # Write header
+        file.write(
+            "GeneID\tPrefix\tSuffix\tContig\tDistance\tPrefixLocation\tSuffixLocation\n"
+        )  # Write header
         # Iterate over each gene group and write distances
         for name, group in df.groupby("GeneID"):
             logger.info(f"Writing information for {name}")
