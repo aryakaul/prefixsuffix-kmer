@@ -10,7 +10,6 @@ rule makebwaidx:
         bwa index {input}
         """
 
-
 rule fastmap:
     output:
         bwafastmap=fn_fastmapraw(_sample="{sample}"),

@@ -25,8 +25,7 @@ wildcard_constraints:
 
 rule all:
     input:
-        expand(fn_pcdbg(_batch="{batch}"), batch=get_batches()),
-        expand(fn_deletionbubbles(_batch="{batch}"), batch=get_batches()),
+        expand(fn_prefsuffkmer(_gene="{gene}", _sample="{sample}"), _gene=fn_genes(), _sample=fn_samples())
 
 
 ##### Modules #####
