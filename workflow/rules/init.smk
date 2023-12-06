@@ -90,51 +90,29 @@ def get_genome_batches():
 def get_gene_batches():
     return GENEBATCHES_FN
 
+def get_samples():
+    return [key for inner_dict in BATCHES_FN.values() for key in inner_dict.keys()]
+
 
 #####################################
 # Global files for individual batches
 #####################################
 
 
-def fn_tree_clean(_batch):
-    return f"{dir_intermediate()}/tree/{_batch}.nwk"
-
-
-def fn_tree_sorted(_batch):
-    return f"{dir_intermediate()}/tree/{_batch}.nwk"
-
-
-def fn_tree_dirty(_batch):
-    return f"{dir_intermediate()}/tree/{_batch}.nwk_dirty"
-
-
-def fn_leaves_sorted(_batch):
-    return f"{dir_intermediate()}/tree/{_batch}.leaves"
-
-
-def fn_nodes_sorted(_batch):
-    return f"{dir_intermediate()}/tree/{_batch}.nodes"
-
-
-#######################################
-# Files for individual genome samples #
-#######################################
-
-
 def fn_idxpersample(_sample):
     return f"{dir_intermediate()}/bwaidx/{_sample}.pac"
 
 
-def fn_samplefasta(_sample):
-    pass
+def fn_samplefasta(_batch, _sample):
+    return BATCHES_FN[_batch][_sample]
 
 
 def fn_fastmapraw(_sample):
     pass
 
 
-def fn_prefsuffkmers():
-    return f"{dir_intermediate()}/prefsuffkmer/{}.fasta"
+def fn_prefsuffkmer(_genebatch):
+    return f"{dir_intermediate()}/prefsuffkmers/{_genebatch}.fasta"
 
 
 ## WILDCARD FUNCTIONS

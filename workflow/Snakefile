@@ -25,7 +25,8 @@ wildcard_constraints:
 
 rule all:
     input:
-        expand(fn_prefsuffkmer(_gene="{gene}", _sample="{sample}"), _gene=fn_genes(), _sample=fn_samples())
+        #expand(fn_prefsuffkmer(_gene="{gene}", _sample="{sample}"), _gene=fn_genes(), _sample=fn_samples())
+        expand(fn_idxpersample(_sample="{sample}"), _sample=get_samples())
 
 
 ##### Modules #####
