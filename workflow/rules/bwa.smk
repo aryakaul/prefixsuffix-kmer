@@ -2,20 +2,23 @@ rule makebwaidx:
     output:
         bwaindex=fn_idxpersample(_sample="{sample}"),
     input:
-        sample=fn_sample(_sample="{sample}"),
+        sample=fn_samplefasta(_batch="{batch}", _sample="{sample}"),
     conda:
         "../envs/bwamem.yml"
+    params:
+        kmer_length=config['kmer_length']
     shell:
         """
-        bwa index {input}
+        mkdir -p $(dirname {output})
+        bwa index -p $(basename {output} .pac) -k {params.kmer_length} {sample}
         """
 
 rule fastmap:
     output:
         bwafastmap=fn_fastmapraw(_sample="{sample}"),
     input:
-        prefsuffkmers=fn_prefsuffkmer(_gene="{gene}"),
-        sample=fn_sample(_sample="{sample}"),
+        prefsuffkmers=fn_prefsuffkmer(_genebatch="{genebatch}"),
+        sample=fn_samplefasta(_batch="{batch}", _sample="{sample}"),
     params:
         kmer_length=config["kmer_length"],
     conda:
