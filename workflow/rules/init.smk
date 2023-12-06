@@ -58,16 +58,37 @@ for x in res:
                 sample = _get_sample_from_fn(sample_fn)
                 BATCHES_FN[batch][sample] = sample_fn
 
+GENEBATCHES_FN = []
+res = dir_input().glob("*.ffn")
+for x in res:
+    b = os.path.basename(x)
+    if not b.endswith(".ffn"):
+        continue
+    batch = b[:-4]
+
+    GENEBATCHES_FN.append(batch)
+
+
+print(BATCHES_FN)
+print(GENEBATCHES_FN)
+
 assert (
     len(BATCHES_FN) != 0
-), f"\nERROR: No input files provided. Please provide at least one batch in '{dir_input()}/'.\n"
+), f"\nERROR: No input genomes provided. Please provide at least one batch in '{dir_input()}/'. Must have the '.txt' extension.\n"
+
+assert (
+    len(GENEBATCHES_FN) != 0
+), f"\nERROR: No input genes provided. Please provide at least one batch in '{dir_input()}/'. Must have the '.ffn' extension.\n"
 
 
 ## BATCHES
 
 
-def get_batches():
+def get_genome_batches():
     return BATCHES_FN.keys()
+
+def get_gene_batches():
+    return GENEBATCHES_FN
 
 
 #####################################
@@ -95,16 +116,16 @@ def fn_nodes_sorted(_batch):
     return f"{dir_intermediate()}/tree/{_batch}.nodes"
 
 
-#####################################
-# Files for individual samples      #
-#####################################
+#######################################
+# Files for individual genome samples #
+#######################################
 
 
 def fn_idxpersample(_sample):
-    pass
+    return f"{dir_intermediate()}/bwaidx/{_sample}.pac"
 
 
-def fn_sample(_sample):
+def fn_samplefasta(_sample):
     pass
 
 
@@ -112,8 +133,8 @@ def fn_fastmapraw(_sample):
     pass
 
 
-def fn_prefsuffkmer(_gene):
-    pass
+def fn_prefsuffkmers():
+    return f"{dir_intermediate()}/prefsuffkmer/{}.fasta"
 
 
 ## WILDCARD FUNCTIONS
