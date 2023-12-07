@@ -25,12 +25,14 @@ def dir_output():
 
 
 # extract sample name from a path
+
+
 def _get_sample_from_fn(x):
     suffixes = ["fa", "fasta", "fna", "ffa"]
 
     b = os.path.basename(x)
-    if b.endswith(".gz"):
-        b = b[:-3]
+    # if b.endswith(".gz"):
+    #    b = b[:-3]
     sample, _, suffix = b.rpartition(".")
     assert suffix in suffixes, f"Unknown suffix of source files ({suffix} in {x})"
     return sample
@@ -43,6 +45,7 @@ def _get_sample_from_fn(x):
 # TODO: might be a good idea to serialise BATCHES_FN to disk and read from it, instead of recomputing it every time
 # TODO: it might hammer the disk in cluster envs, depending on the number of batches
 BATCHES_FN = {}
+SAMPLE2BATCHES_FN = {}
 res = dir_input().glob("*.txt")
 for x in res:
     b = os.path.basename(x)
@@ -56,6 +59,7 @@ for x in res:
             sample_fn = y.strip()
             if sample_fn:
                 sample = _get_sample_from_fn(sample_fn)
+                SAMPLE2BATCHES_FN[sample] = batch
                 BATCHES_FN[batch][sample] = sample_fn
 
 GENEBATCHES_FN = []
@@ -68,9 +72,6 @@ for x in res:
 
     GENEBATCHES_FN.append(batch)
 
-
-print(BATCHES_FN)
-print(GENEBATCHES_FN)
 
 assert (
     len(BATCHES_FN) != 0
@@ -87,11 +88,17 @@ assert (
 def get_genome_batches():
     return BATCHES_FN.keys()
 
+
 def get_gene_batches():
     return GENEBATCHES_FN
 
+
+def get_samples_for_batch(_batch):
+    return [key for key in BATCHES_FN[_batch]]
+
+
 def get_samples():
-    return [key for inner_dict in BATCHES_FN.values() for key in inner_dict.keys()]
+    return SAMPLE2BATCHES_FN.keys()
 
 
 #####################################
@@ -99,20 +106,25 @@ def get_samples():
 #####################################
 
 
-def fn_idxpersample(_sample):
-    return f"{dir_intermediate()}/bwaidx/{_sample}.pac"
-
-
-def fn_samplefasta(_batch, _sample):
-    return BATCHES_FN[_batch][_sample]
-
-
-def fn_fastmapraw(_sample):
-    pass
+def fn_idxpersample(_batch, _sample):
+    return f"{dir_intermediate()}/bwaidx/{_batch}/{_sample}.pac"
 
 
 def fn_prefsuffkmer(_genebatch):
-    return f"{dir_intermediate()}/prefsuffkmers/{_genebatch}.fasta"
+    return f"{dir_intermediate()}/prefsuffkmers/{_genebatch}.ffn"
+
+
+def fn_fastmapraw(_batch, _sample, _genebatch):
+    return f"{dir_intermediate()}/prefsuffkmers/fastmap/{_batch}/{_sample}-{_genebatch}-raw.fastmap"
+
+def fn_fastmapprocess(_batch, _sample, _genebatch):
+    return f"{dir_intermediate()}/prefsuffkmers/fastmap/{_batch}/{_sample}-{_genebatch}-processed.fastmap"
+
+def fn_fastmapdists(_batch, _sample, _genebatch):
+    return f"{dir_intermediate()}/prefsuffkmers/fastmap/{_batch}/{_sample}-{_genebatch}-distances.tsv"
+
+def fn_prefsuffkmer(_genebatch):
+    return f"{dir_intermediate()}/prefsuffkmers/{_genebatch}-prefsuff-k{config['kmer_length']}-g{config['gap_distance']}.ffn"
 
 
 ## WILDCARD FUNCTIONS

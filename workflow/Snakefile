@@ -15,18 +15,31 @@ report: "report/workflow.rst"
 
 include: "rules/init.smk"
 include: "rules/bwa.smk"
+include: "rules/kmercreation.smk"
+include: "rules/fastmap_processing.smk"
 
 
 ## WILDCARDS CONSTRAINS
-wildcard_constraints:
-    sample=r"[a-zA-Z0-9_-]+",
-    batch=r"[a-zA-Z0-9_-]+",
+# wildcard_constraints:
+#    sample=r"[a-zA-Z0-9_-]+",
+#    batch=r"[a-zA-Z0-9_-]+",
 
 
+# print(get_samples())
 rule all:
     input:
-        #expand(fn_prefsuffkmer(_gene="{gene}", _sample="{sample}"), _gene=fn_genes(), _sample=fn_samples())
-        expand(fn_idxpersample(_sample="{sample}"), _sample=get_samples())
+        #expand(
+            #fn_idxpersample(_batch="{batch}", _sample="{sample}"),
+            #batch=["test"],
+            #sample=get_samples_for_batch("test"),
+        #),
+        #expand(fn_prefsuffkmer(_genebatch="{genebatch}"), genebatch=get_gene_batches()),
+        expand(
+            fn_fastmapdists(_sample="{sample}", _batch="{batch}", _genebatch="{genebatch}"),
+            batch=["test"],
+            sample=get_samples_for_batch("test"),
+            genebatch=get_gene_batches()
+        )
 
 
 ##### Modules #####

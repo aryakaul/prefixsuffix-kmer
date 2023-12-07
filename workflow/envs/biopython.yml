@@ -3,5 +3,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - pandas
   - loguru
+  - pip
+  - pip:
+      - biopython
