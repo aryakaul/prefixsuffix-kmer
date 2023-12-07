@@ -44,7 +44,7 @@ endif
 ######################
 
 all: ## Run everything
-	snakemake -nr -j $(CONDA_PARAMS) -p --rerun-incomplete $(SNAKEMAKE_PARAM_DIR)
+	snakemake -j $(CONDA_PARAMS) -p --rerun-incomplete $(SNAKEMAKE_PARAM_DIR)
 
 help: ## Print help messages
 	@printf "$$(grep -hE '^\S*(:.*)?##' $(MAKEFILE_LIST) \

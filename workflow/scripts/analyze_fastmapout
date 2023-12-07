@@ -8,7 +8,7 @@ import pandas as pd
 
 
 # Function to write distances for each gene to a file
-def write_distances(group, file):
+def write_distances(group, file, k, g):
     prefix_df = group[group["KmerType"].str.contains("prefix")]
     suffix_df = group[group["KmerType"].str.contains("suffix")]
 
@@ -19,15 +19,18 @@ def write_distances(group, file):
             if prefix_row["Contig"] == suffix_row["Contig"] and prefix_row[
                     'Contig'] != "Null":
                 distance = abs(
-                    int(suffix_row["Location"]) - int(prefix_row["Location"]))
+                    int(suffix_row["Location"]) - int(prefix_row["Location"])) + k + 2*g
+                length = int(prefix_row['GeneID'].split("-")[1][3:])
+                difference = distance-length
             else:
                 if prefix_row['Contig'] != suffix_row['Contig']:
                     distance = "ContigsDifferent"
                 if prefix_row['Contig'] == "Null" or suffix_row[
                         'Contig'] == "Null":
                     distance = "KmerNotFound"
+                difference="NaN"
             file.write(
-                f"{prefix_row['GeneID']}\t{prefix_row['kmerID']}\t{suffix_row['kmerID']}\t{prefix_row['Contig']}\t{distance}\t{prefix_loc}\t{suffix_loc}\n"
+                f"{prefix_row['GeneID']}\t{prefix_row['kmerID']}\t{suffix_row['kmerID']}\t{prefix_row['Contig']}\t{distance}\t{difference}\t{prefix_loc}\t{suffix_loc}\n"
             )
 
 
@@ -53,6 +56,22 @@ def main():
         required=True,
         help="Output distance dataframe for mappings",
         metavar="FILE",
+    )
+
+    parser.add_argument(
+        "-k",
+        "--kmer-length",
+        type=int,
+        required=True,
+        help="Kmer Length",
+    )
+
+    parser.add_argument(
+        "-g",
+        "--gap-distance",
+        type=int,
+        required=True,
+        help="Gap distance",
     )
 
     parser.add_argument(
@@ -82,12 +101,12 @@ def main():
 
     with open(args.output, "w") as file:
         file.write(
-            "GeneID\tPrefix\tSuffix\tContig\tDistance\tPrefixLocation\tSuffixLocation\n"
+            "GeneID\tPrefix\tSuffix\tContig\tDistance\tDifference\tPrefixLocation\tSuffixLocation\n"
         )  # Write header
         # Iterate over each gene group and write distances
         for name, group in df.groupby("GeneID"):
             logger.info(f"Writing information for {name}")
-            write_distances(group, file)
+            write_distances(group, file, args.kmer_length, args.gap_distance)
 
 
 if __name__ == "__main__":
