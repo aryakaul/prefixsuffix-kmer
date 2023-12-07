@@ -16,13 +16,13 @@ Workflow for identifying putative gene fusion events through rapid k-mer matchin
 * [4. Usage](#4-usage)
     * [4a. Basic example](#4a-basic-example)
     * [4b. Adjusting configuration](#4b-adjusting-configuration)
-    * [4c. List of workflow commands](#4d-list-of-workflow-commands)
-    * [4d. Troubleshooting](#4e-troubleshooting)
 * [5. Citation](#5-citation)
 * [6. Issues](#6-issues)
 * [7. Changelog](#7-changelog)
 * [8. License](#8-license)
 * [9. Contacts](#9-contacts)
+* [10. Acknowledgements](#10-acknowledgements)
+
 
 <!-- vim-markdown-toc -->
 
