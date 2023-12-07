@@ -19,16 +19,17 @@ def write_distances(group, file, k, g):
             if prefix_row["Contig"] == suffix_row["Contig"] and prefix_row[
                     'Contig'] != "Null":
                 distance = abs(
-                    int(suffix_row["Location"]) - int(prefix_row["Location"])) + k + 2*g
+                    int(suffix_row["Location"]) -
+                    int(prefix_row["Location"])) + k + 2 * g
                 length = int(prefix_row['GeneID'].split("-")[1][3:])
-                difference = distance-length
+                difference = distance - length
             else:
                 if prefix_row['Contig'] != suffix_row['Contig']:
                     distance = "ContigsDifferent"
                 if prefix_row['Contig'] == "Null" or suffix_row[
                         'Contig'] == "Null":
                     distance = "KmerNotFound"
-                difference="NaN"
+                difference = "NaN"
             file.write(
                 f"{prefix_row['GeneID']}\t{prefix_row['kmerID']}\t{suffix_row['kmerID']}\t{prefix_row['Contig']}\t{distance}\t{difference}\t{prefix_loc}\t{suffix_loc}\n"
             )

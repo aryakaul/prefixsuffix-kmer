@@ -21,17 +21,19 @@ def process_fasta(input_fasta, k, n, output_fasta):
             logger.debug(f"Creating prefix kmer for {record.id}")
             # Create the prefix k-mer after the gap distance n
             prefix_kmer = seq[n:n + k]
-            prefix_record = SeqRecord(prefix_kmer,
-                                      id=f"{record.id}-len{len(seq)}_prefix_k{k}_n{n}",
-                                      description="")
+            prefix_record = SeqRecord(
+                prefix_kmer,
+                id=f"{record.id}-len{len(seq)}_prefix_k{k}_n{n}",
+                description="")
             output_records.append(prefix_record)
 
             logger.debug(f"Creating suffix kmer for {record.id}")
             # Create the suffix k-mer before the gap distance n
             suffix_kmer = seq[-(n + k):-n]
-            suffix_record = SeqRecord(suffix_kmer,
-                                      id=f"{record.id}-len{len(seq)}_suffix_k{k}_n{n}",
-                                      description="")
+            suffix_record = SeqRecord(
+                suffix_kmer,
+                id=f"{record.id}-len{len(seq)}_suffix_k{k}_n{n}",
+                description="")
             output_records.append(suffix_record)
         else:
             logger.warning(

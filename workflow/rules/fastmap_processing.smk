@@ -1,8 +1,12 @@
 rule process_fastmap_out:
     output:
-        fastmapprocessed=fn_fastmapprocess(_sample="{sample}", _batch="{batch}", _genebatch="{genebatch}") 
+        fastmapprocessed=fn_fastmapprocess(
+            _sample="{sample}", _batch="{batch}", _genebatch="{genebatch}"
+        ),
     input:
-        fastmapout=fn_fastmapraw(_sample="{sample}", _batch="{batch}", _genebatch="{genebatch}"),
+        fastmapout=fn_fastmapraw(
+            _sample="{sample}", _batch="{batch}", _genebatch="{genebatch}"
+        ),
     conda:
         "../envs/biopython.yml"
     params:
@@ -14,17 +18,22 @@ rule process_fastmap_out:
                 -o {output}
         """
 
+
 rule analyze_fastmap_out:
     output:
-        fastmapdistances=fn_fastmapdists(_sample="{sample}", _batch="{batch}", _genebatch="{genebatch}")
+        fastmapdistances=fn_fastmapdists(
+            _sample="{sample}", _batch="{batch}", _genebatch="{genebatch}"
+        ),
     input:
-        fastmapprocessed=fn_fastmapprocess(_sample="{sample}", _batch="{batch}", _genebatch="{genebatch}") 
+        fastmapprocessed=fn_fastmapprocess(
+            _sample="{sample}", _batch="{batch}", _genebatch="{genebatch}"
+        ),
     conda:
         "../envs/pandas.yml"
     params:
         script=snakemake.workflow.srcdir("../scripts/analyze_fastmapout"),
-        kmer_length=config['kmer_length'],
-        gap_distance=config['gap_distance'],
+        kmer_length=config["kmer_length"],
+        gap_distance=config["gap_distance"],
     shell:
         """
         {params.script} \\

@@ -29,17 +29,19 @@ include: "rules/fastmap_processing.smk"
 rule all:
     input:
         #expand(
-            #fn_idxpersample(_batch="{batch}", _sample="{sample}"),
-            #batch=["test"],
-            #sample=get_samples_for_batch("test"),
+        #fn_idxpersample(_batch="{batch}", _sample="{sample}"),
+        #batch=["test"],
+        #sample=get_samples_for_batch("test"),
         #),
         #expand(fn_prefsuffkmer(_genebatch="{genebatch}"), genebatch=get_gene_batches()),
         expand(
-            fn_fastmapdists(_sample="{sample}", _batch="{batch}", _genebatch="{genebatch}"),
+            fn_fastmapdists(
+                _sample="{sample}", _batch="{batch}", _genebatch="{genebatch}"
+            ),
             batch=["test"],
             sample=get_samples_for_batch("test"),
-            genebatch=get_gene_batches()
-        )
+            genebatch=get_gene_batches(),
+        ),
 
 
 ##### Modules #####

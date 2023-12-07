@@ -14,9 +14,11 @@ rule makebwaidx:
 
 rule fastmap:
     output:
-        bwafastmap=fn_fastmapraw(_sample="{sample}", _batch="{batch}", _genebatch="{genebatch}"),
+        bwafastmap=fn_fastmapraw(
+            _sample="{sample}", _batch="{batch}", _genebatch="{genebatch}"
+        ),
     input:
-        prefsuffkmers = fn_prefsuffkmer(_genebatch="{genebatch}"),
+        prefsuffkmers=fn_prefsuffkmer(_genebatch="{genebatch}"),
         bwaindex=fn_idxpersample(_batch="{batch}", _sample="{sample}"),
     params:
         kmer_length=config["kmer_length"],
