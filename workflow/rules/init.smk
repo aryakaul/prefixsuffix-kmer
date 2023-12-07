@@ -117,11 +117,14 @@ def fn_prefsuffkmer(_genebatch):
 def fn_fastmapraw(_batch, _sample, _genebatch):
     return f"{dir_intermediate()}/prefsuffkmers/fastmap/{_batch}/{_sample}-{_genebatch}-raw.fastmap"
 
+
 def fn_fastmapprocess(_batch, _sample, _genebatch):
     return f"{dir_intermediate()}/prefsuffkmers/fastmap/{_batch}/{_sample}-{_genebatch}-processed.fastmap"
 
+
 def fn_fastmapdists(_batch, _sample, _genebatch):
     return f"{dir_intermediate()}/prefsuffkmers/fastmap/{_batch}/{_sample}-{_genebatch}-distances.tsv"
+
 
 def fn_prefsuffkmer(_genebatch):
     return f"{dir_intermediate()}/prefsuffkmers/{_genebatch}-prefsuff-k{config['kmer_length']}-g{config['gap_distance']}.ffn"
