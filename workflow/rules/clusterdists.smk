@@ -6,6 +6,8 @@ checkpoint cluster_dists:
     conda:
         "../envs/sklearn.yml"
     params:
+        epsilon=config['max_distance'],
+        min_samples=config['min_samples']
         intermediate=config['intermediate_dir'],
         script=snakemake.workflow.srcdir("../scripts/cluster_dists"),
     shell:
@@ -14,10 +16,9 @@ checkpoint cluster_dists:
         {params.script} \\
                 -i {params.intermediate}/kmerdists/{wildcards.batch}/{wildcards.genebatch} \\
                 -o {output} \\
-                -vv \\
-                --epsilon 500 \\
-                --min_samples 1 \\
-
+                --epsilon {params.epsilon} \\
+                --min_samples {params.min_samples} \\
+                -vv 
         """
 
 rule aggregate_2:
