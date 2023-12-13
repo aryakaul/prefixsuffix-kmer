@@ -1,0 +1,82 @@
+#!/usr/bin/env python3
+
+import argparse
+import pandas as pd
+from loguru import logger
+
+def load_data(file_path):
+    """
+    Load data from a file into a pandas DataFrame.
+    """
+    try:
+        dtype_dict = {col: str for col in pd.read_csv(file_path, nrows=0, sep='\t').columns}
+        df = pd.read_csv(file_path, sep='\t', dtype=dtype_dict)
+        logger.info("Data loaded successfully from {}", file_path)
+        return df
+    except Exception as e:
+        logger.error("Failed to load data: {}", e)
+        raise
+
+def preprocess_data(df):
+    """
+    Preprocess the DataFrame: Convert 'Difference' to numeric and filter non-NaN rows.
+    """
+    df['Difference'] = pd.to_numeric(df['Difference'], errors='coerce')
+    return df[df['Difference'].notna()].copy()
+
+def extract_genome_id(contig_value):
+    """
+    Extract genome ID from 'Contig' column.
+    """
+    return contig_value.split('.')[0] if pd.notna(contig_value) else None
+
+def find_closest_differences(df):
+    """
+    Find the rows with 'Difference' closest to 0 for each GenomeID and GeneID pair.
+    """
+    df['GenomeID'] = df['Contig'].apply(extract_genome_id)
+    
+    # Function to find the row with closest 'Difference'
+    def closest_row(group):
+        return group.iloc[(group['Difference'] - 0).abs().argsort()[:1]]
+
+    # Group by both 'GenomeID' and 'GeneID', and apply the closest_row function
+    closest_diff_df = df.groupby(['GenomeID', 'GeneID']).apply(closest_row)
+
+    # Reset index to flatten the DataFrame
+    closest_diff_df.reset_index(drop=True, inplace=True)
+    
+    return closest_diff_df
+
+def save_to_file(df, output_file):
+    """
+    Save the DataFrame to a CSV file.
+    """
+    try:
+        df.to_csv(output_file, index=False)
+        logger.info("Data saved successfully to {}", output_file)
+    except Exception as e:
+        logger.error("Failed to save data: {}", e)
+        raise
+
+
+def main():
+    """
+    Main function to run the analysis.
+    """
+    parser = argparse.ArgumentParser(description="Analyze genomic data for closest differences.")
+    parser.add_argument("file_path", help="Path to the genomic data file")
+    parser.add_argument("output", help="Path to the output dataframe file")
+
+    args = parser.parse_args()
+
+    df = load_data(args.file_path)
+    filtered_df = preprocess_data(df)
+    closest_diff_df = find_closest_differences(filtered_df)
+    logger.info("Found closest differences per genome/gene!")
+    # logger.info("Closest differences per genome:\n{}", closest_diff_df)
+    save_to_file(closest_diff_df, args.output_file)
+    logger.success(f"File saved to {args.output_file}")
+
+if __name__ == "__main__":
+    main()
