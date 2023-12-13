@@ -72,16 +72,15 @@ def create_violin_plot(gene_df, gene_id, output_file):
 
 
 # Function to plot and save gene clusters
-def plot_and_save_gene_clusters(df, output_dir):
-    for gene_file in glob.glob(output_dir + "/*_clusters.csv"):
-        gene = os.path.basename(gene_file).split("_")[0]
-        gene_df = df[df["GeneID"] == gene].copy()
-        clusters = pd.read_csv(gene_file, header=None)[1]
-        gene_df["Cluster"] = clusters
+# def plot_and_save_gene_clusters(df, output_dir):
+    # for gene_file in glob.glob(output_dir + "/*_clusters.csv"):
+        # gene = os.path.basename(gene_file).split("_")[0]
+        # gene_df = df[df["GeneID"] == gene].copy()
+        # clusters = pd.read_csv(gene_file, header=None)[1]
+        # gene_df["Cluster"] = clusters
 
-        # Plotting
-        plot_file = os.path.join(output_dir, f"{gene}_scatterplot.png")
-        create_violin_plot(gene_df, gene, plot_file)
+        # plot_file = os.path.join(output_dir, f"{gene}_scatterplot.png")
+        # create_violin_plot(gene_df, gene, plot_file)
 
 
 def main():
@@ -133,8 +132,8 @@ def main():
     clustering_results = cluster_gene_differences(df, args.epsilon,
                                                   args.min_samples,
                                                   args.output_dir)
-    logger.info("Written clustering results. Plotting differences now.")
-    plot_and_save_gene_clusters(df, args.output_dir)
+    # logger.info("Written clustering results. Plotting differences now.")
+    # plot_and_save_gene_clusters(df, args.output_dir)
     logger.success("Complete.")
 
 
