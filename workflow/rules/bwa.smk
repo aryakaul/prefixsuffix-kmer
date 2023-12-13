@@ -33,12 +33,3 @@ rule fastmap:
         idx=$(dirname {input.bwaindex})/$(basename {input.bwaindex} .bwt)
         bwa fastmap -w 99999 -l {params.kmer_length} $idx {input.prefsuffkmers} > {output}
         """
-
-
-# rule aggregate:
-#    input:
-#        aggregate_fastmap_raw,
-#    output:
-#        f"{dir_output()}" + "/{batch}-fastmapraw.txt",
-#    shell:
-#        "cat {input} > {output}"

@@ -132,10 +132,28 @@ def aggregate_filter_dists(wildcards):
     checkpoint_output = checkpoints.make_bwaidx.get(**wildcards).output[0]
     return expand(
         f"{dir_intermediate()}"
-        + "/kmerdists/{batch}/{genebatch}-{bucket}-filterdists.csv",
+        + "/kmerdists/{batch}/{genebatch}/{bucket}-filterdists.csv",
         batch=wildcards.batch,
         genebatch=get_gene_batches(),
         bucket=glob_wildcards(os.path.join(checkpoint_output, "{bucket}.bwt")).bucket,
+    )
+
+
+def aggregate_filter_distdirs(wildcards):
+    checkpoint_output = checkpoints.make_bwaidx.get(**wildcards).output[0]
+    return expand(
+        f"{dir_intermediate()}" + "/kmerdists/{batch}/{genebatch}",
+        batch=wildcards.batch,
+        genebatch=get_gene_batches(),
+    )
+
+
+def aggregate_passing_genes(wildcards):
+    checkpoint_output = checkpoints.cluster_dists.get(**wildcards).output[0]
+    return expand(
+        f"{dir_output()}" + "/passing_genes/{batch}/{genebatch}",
+        batch=get_genome_batches(),
+        genebatch=get_gene_batches(),
     )
 
 
@@ -162,7 +180,7 @@ def fn_fastmapdists(_batch, _bucket, _genebatch):
 
 
 def fn_parsedists(_batch, _bucket, _genebatch):
-    return f"{dir_intermediate()}/kmerdists/{_batch}/{_genebatch}-{_bucket}-filterdists.csv"
+    return f"{dir_intermediate()}/kmerdists/{_batch}/{_genebatch}/{_bucket}-filterdists.csv"
 
 
 def fn_prefsuffkmer(_genebatch):
