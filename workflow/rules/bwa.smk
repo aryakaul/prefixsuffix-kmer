@@ -1,31 +1,44 @@
-rule makebwaidx:
+checkpoint make_bwaidx:
     output:
-        bwaindex=fn_idxpersample(_batch="{batch}", _sample="{sample}"),
+        directory(f"{dir_intermediate()}" + "/bwa_indices/{batch}"),
     input:
-        fasta=w_sample_source,
+        fof=f"{dir_input()}" + "/{batch}.txt",
+    params:
+        script=snakemake.workflow.srcdir("../scripts/build_bwaindex_fof"),
+        samplesperidx=config["batch_size"],
     conda:
         "../envs/bwamem.yml"
     shell:
         """
-        mkdir -p $(dirname {output})
-        bwa index -p $(dirname {output})/$(basename {output} .pac) {input.fasta}
+        {params.script}  \\
+                {input} \\
+                {params.samplesperidx} \\
+                -o {output}
         """
 
 
 rule fastmap:
     output:
-        bwafastmap=fn_fastmapraw(
-            _sample="{sample}", _batch="{batch}", _genebatch="{genebatch}"
-        ),
+        fn_fastmapraw(_batch="{batch}", _bucket="{bucket}", _genebatch="{genebatch}"),
     input:
         prefsuffkmers=fn_prefsuffkmer(_genebatch="{genebatch}"),
-        bwaindex=fn_idxpersample(_batch="{batch}", _sample="{sample}"),
+        bwaindex=fn_bwaidxbucket(_batch="{batch}", _bucket="{bucket}"),
     params:
         kmer_length=config["kmer_length"],
     conda:
         "../envs/bwamem.yml"
     shell:
         """
-        idx=$(dirname {input.bwaindex})/$(basename {input.bwaindex} .pac)
+        mkdir -p $(dirname {output})
+        idx=$(dirname {input.bwaindex})/$(basename {input.bwaindex} .bwt)
         bwa fastmap -w 99999 -l {params.kmer_length} $idx {input.prefsuffkmers} > {output}
         """
+
+
+# rule aggregate:
+#    input:
+#        aggregate_fastmap_raw,
+#    output:
+#        f"{dir_output()}" + "/{batch}-fastmapraw.txt",
+#    shell:
+#        "cat {input} > {output}"
