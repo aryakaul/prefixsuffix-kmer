@@ -1,2 +1,3 @@
 .snakemake/
 .idea
+.ipynb_checkpoints/

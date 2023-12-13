@@ -1,12 +1,10 @@
-rule process_fastmap_out:
+rule fastmap_process:
     output:
-        fastmapprocessed=fn_fastmapprocess(
-            _sample="{sample}", _batch="{batch}", _genebatch="{genebatch}"
+        fn_fastmapprocess(
+            _batch="{batch}", _bucket="{bucket}", _genebatch="{genebatch}"
         ),
     input:
-        fastmapout=fn_fastmapraw(
-            _sample="{sample}", _batch="{batch}", _genebatch="{genebatch}"
-        ),
+        fn_fastmapraw(_batch="{batch}", _bucket="{bucket}", _genebatch="{genebatch}"),
     conda:
         "../envs/biopython.yml"
     params:
@@ -14,19 +12,17 @@ rule process_fastmap_out:
     shell:
         """
         {params.script} \\
-                -i {input} \\
-                -o {output}
+        -i {input} \\
+        -o {output}
         """
 
 
-rule analyze_fastmap_out:
+rule fastmap_distances:
     output:
-        fastmapdistances=fn_fastmapdists(
-            _sample="{sample}", _batch="{batch}", _genebatch="{genebatch}"
-        ),
+        fn_fastmapdists(_batch="{batch}", _bucket="{bucket}", _genebatch="{genebatch}"),
     input:
-        fastmapprocessed=fn_fastmapprocess(
-            _sample="{sample}", _batch="{batch}", _genebatch="{genebatch}"
+        fn_fastmapprocess(
+            _batch="{batch}", _bucket="{bucket}", _genebatch="{genebatch}"
         ),
     conda:
         "../envs/pandas.yml"
@@ -37,8 +33,19 @@ rule analyze_fastmap_out:
     shell:
         """
         {params.script} \\
-                -i {input} \\
-                -o {output} \\
-                -k {params.kmer_length} \\
-                -g {params.gap_distance}
+        -i {input} \\
+        -o {output} \\
+        -k {params.kmer_length} \\
+        -g {params.gap_distance}
+        """
+
+
+rule aggregate:
+    input:
+        aggregate_fastmap_dists,
+    output:
+        f"{dir_output()}" + "/{batch}-fastmapdists.txt",
+    shell:
+        """
+        echo {input} > {output}
         """

@@ -17,10 +17,11 @@ use_conda:            True # build conda environments automatically by Snakemake
 
 # (1) General parameters; notes:
 #     - kmer length defines k for dBGs 
-#     - if trees_required is true, then the workflow will insist on user-provided trees
-#     - max_colors is the number of hexadecimal color codes to include in the dbg
-kmer_length:           31
+#     - gap distance is
+#     - batch size is
+kmer_length:           25
 gap_distance:           4
+batch_size:           500
   
 
 # (2) Mashtree parameters; notes:
