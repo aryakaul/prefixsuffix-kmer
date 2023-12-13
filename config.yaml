@@ -25,5 +25,5 @@ batch_size:             500
   
 
 # (2) DBSCAN parameters; 
-epsilon:                800
+max_distance:           800
 min_samples:            5
