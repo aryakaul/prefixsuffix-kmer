@@ -117,17 +117,6 @@ def fn_batchidxdir(_batch, _sample):
     return f"{dir_intermediate()}/bwaidx/{_batch}/{_sample}"
 
 
-def aggregate_fastmap_raw(wildcards):
-    checkpoint_output = checkpoints.make_bwaidx.get(**wildcards).output[0]
-    return expand(
-        f"{dir_intermediate()}"
-        + "/prefsuffkmers/fastmap/{batch}/{genebatch}-{bucket}-raw.fastmap",
-        batch=wildcards.batch,
-        genebatch=get_gene_batches(),
-        bucket=glob_wildcards(os.path.join(checkpoint_output, "{bucket}.bwt")).bucket,
-    )
-
-
 def aggregate_fastmap_dists(wildcards):
     checkpoint_output = checkpoints.make_bwaidx.get(**wildcards).output[0]
     return expand(
@@ -138,18 +127,16 @@ def aggregate_fastmap_dists(wildcards):
         bucket=glob_wildcards(os.path.join(checkpoint_output, "{bucket}.bwt")).bucket,
     )
 
-
-# def aggregate_indices(wildcards):
-# checkpoint_output = checkpoints.make_bwaidx.get(
-# batch=wildcards.batch, sample=wildcards.sample
-# ).output[0]
-# (extra_files,) = glob_wildcards(os.path.join(checkpoint_output, "{extra}.bwt"))
-# return expand(
-# f"{dir_intermediate()}/{{batch}}/{{sample}}/{{extra}}.bwt",
-# batch=wildcards.batch,
-# sample=wildcards.sample,
-# extra=extra_files,
-# )
+def aggregate_filter_dists(wildcards):
+    checkpoint_output = checkpoints.make_bwaidx.get(**wildcards).output[0]
+    return f"{dir_intermediate()}/kmerdists/{_batch}/{_genebatch}-{_bucket}-filterdists.csv"
+    return expand(
+        f"{dir_intermediate()}"
+        + "/kmerdists/{batch}/{genebatch}-{bucket}-filterdists.csv",
+        batch=wildcards.batch,
+        genebatch=get_gene_batches(),
+        bucket=glob_wildcards(os.path.join(checkpoint_output, "{bucket}.bwt")).bucket,
+    )
 
 
 def fn_prefsuffkmer(_genebatch):
@@ -173,6 +160,8 @@ def fn_fastmapprocess(_batch, _bucket, _genebatch):
 def fn_fastmapdists(_batch, _bucket, _genebatch):
     return f"{dir_intermediate()}/fastmap/distances/{_batch}/{_genebatch}-{_bucket}-distances.tsv"
 
+def fn_parsedists(_batch, _bucket, _genebatch):
+    return f"{dir_intermediate()}/kmerdists/{_batch}/{_genebatch}-{_bucket}-filterdists.csv"
 
 def fn_prefsuffkmer(_genebatch):
     return f"{dir_intermediate()}/prefsuffkmers/{_genebatch}-prefsuff-k{config['kmer_length']}-g{config['gap_distance']}.ffn"
