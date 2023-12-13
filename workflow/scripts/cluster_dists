@@ -1,0 +1,142 @@
+#!/usr/bin/env python
+
+import scipy
+import sys
+import pandas as pd
+import glob
+import os
+import argparse
+from loguru import logger
+from sklearn.cluster import DBSCAN
+import seaborn as sns
+import matplotlib.pyplot as plt
+import concurrent.futures
+
+
+# Function to read all CSV files and concatenate them into a single DataFrame
+def aggregate_results(folder_path):
+    all_files = glob.glob(folder_path + "/*.csv")
+    return pd.concat((pd.read_csv(f) for f in all_files), ignore_index=True)
+
+
+# Function to process a single gene
+def process_gene(gene, df, epsilon, min_samples):
+    logger.debug(f"Processing gene: {gene}")
+    gene_data = df[df["GeneID"] == gene]
+    differences = gene_data["Difference"].values.reshape(-1, 1)
+    dbscan = DBSCAN(eps=epsilon, min_samples=min_samples)
+    labels = dbscan.fit_predict(differences)
+
+    # Check if the gene meets the criteria
+    if len(set(labels)) > 2:  # More than 1 cluster (excluding noise)
+        logger.info(f"{gene} passed filter.")
+        return gene, labels, True
+    return gene, labels, False
+
+
+# Function to perform clustering and save results
+def cluster_gene_differences(df, epsilon, min_samples, output_dir):
+    unique_genes = df["GeneID"].unique()
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = {
+            executor.submit(process_gene, gene, df, epsilon, min_samples): gene
+            for gene in unique_genes
+        }
+
+        for future in concurrent.futures.as_completed(futures):
+            gene, labels, is_worthy = future.result()
+
+            if is_worthy:
+                gene_df = df[df["GeneID"] == gene].copy()
+                gene_df["Cluster"] = labels
+
+                # Plotting and saving
+                create_violin_plot(
+                    gene_df, gene,
+                    os.path.join(output_dir, f"{gene}_scatterplot.png"))
+                gene_df.to_csv(os.path.join(output_dir,
+                                            f"{gene}_clusters.csv"),
+                               index=False)
+
+
+# Function to create violin plots for each gene
+def create_violin_plot(gene_df, gene_id, output_file):
+    plt.figure(figsize=(10, 6))
+    sns.violinplot(x="Cluster", y="Difference", data=gene_df, inner="quartile")
+    plt.title(f"Violin Plot of Differences for Gene: {gene_id}")
+    plt.xlabel("Cluster Assignment")
+    plt.ylabel("Difference")
+    plt.savefig(output_file)
+    plt.close()
+
+
+# Function to plot and save gene clusters
+def plot_and_save_gene_clusters(df, output_dir):
+    for gene_file in glob.glob(output_dir + "/*_clusters.csv"):
+        gene = os.path.basename(gene_file).split("_")[0]
+        gene_df = df[df["GeneID"] == gene].copy()
+        clusters = pd.read_csv(gene_file, header=None)[1]
+        gene_df["Cluster"] = clusters
+
+        # Plotting
+        plot_file = os.path.join(output_dir, f"{gene}_scatterplot.png")
+        create_violin_plot(gene_df, gene, plot_file)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Gene clustering script.")
+    parser.add_argument(
+        "-i",
+        "--input_dir",
+        type=str,
+        required=True,
+        help="Directory containing input CSV files.",
+    )
+    parser.add_argument(
+        "-o",
+        "--output_dir",
+        type=str,
+        required=True,
+        help="Directory to store output files.",
+    )
+    parser.add_argument("--epsilon",
+                        type=float,
+                        default=800,
+                        help="Epsilon value for DBSCAN.")
+    parser.add_argument("--min_samples",
+                        type=int,
+                        default=20,
+                        help="Minimum samples value for DBSCAN.")
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help=
+        "Increase verbosity level. Can be specified multiple times for more detailed logs.",
+    )
+
+    args = parser.parse_args()
+
+    if args.verbose == 0:
+        logger.remove()
+    elif args.verbose == 1:
+        logger.remove()
+        logger.add(sys.stderr, level="INFO")
+    elif args.verbose >= 2:
+        logger.remove()
+        logger.add(sys.stderr, level="DEBUG")
+
+    df = aggregate_results(args.input_dir)
+    logger.info("Read all input files.")
+    clustering_results = cluster_gene_differences(df, args.epsilon,
+                                                  args.min_samples,
+                                                  args.output_dir)
+    logger.info("Written clustering results. Plotting differences now.")
+    plot_and_save_gene_clusters(df, args.output_dir)
+    logger.success("Complete.")
+
+
+if __name__ == "__main__":
+    main()
