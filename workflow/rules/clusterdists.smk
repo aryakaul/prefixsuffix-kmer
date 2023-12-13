@@ -7,6 +7,10 @@ checkpoint cluster_dists:
         "../envs/sklearn.yml"
     params:
         intermediate=config['intermediate_dir'],
+        min_samples=config['min_samples'],
+        min_cluster_size=config['min_cluster_size'],
+        cluster_selection_epsilon=config['cluster_selection_epsilon'],
+        metric=config['metric'],
         script=snakemake.workflow.srcdir("../scripts/cluster_dists"),
     shell:
         """
@@ -15,9 +19,10 @@ checkpoint cluster_dists:
                 -i {params.intermediate}/kmerdists/{wildcards.batch}/{wildcards.genebatch} \\
                 -o {output} \\
                 -vv \\
-                --epsilon 500 \\
-                --min_samples 1 \\
-
+                --min_cluster_size {params.min_cluster_size} \\
+                --min_samples {params.min_samples} \\
+                --cluster_selection_epsilon {params.cluster_selection_epsilon} \\
+                --metric {params.metric}
         """
 
 rule aggregate_2:

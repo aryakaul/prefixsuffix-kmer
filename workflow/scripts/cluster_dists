@@ -7,7 +7,7 @@ import glob
 import os
 import argparse
 from loguru import logger
-from sklearn.cluster import DBSCAN
+from sklearn.cluster import HDBSCAN
 import seaborn as sns
 import matplotlib.pyplot as plt
 import concurrent.futures
@@ -20,12 +20,21 @@ def aggregate_results(folder_path):
 
 
 # Function to process a single gene
-def process_gene(gene, df, epsilon, min_samples):
+def process_gene(gene, df, min_cluster_size, min_samples,
+                 cluster_selection_epsilon, metric):
     logger.debug(f"Processing gene: {gene}")
     gene_data = df[df["GeneID"] == gene]
     differences = gene_data["Difference"].values.reshape(-1, 1)
-    dbscan = DBSCAN(eps=epsilon, min_samples=min_samples)
-    labels = dbscan.fit_predict(differences)
+    if len(differences) == 1:
+        return gene, [0], False
+    hdbscan = HDBSCAN(
+        min_cluster_size=min_cluster_size,
+        min_samples=min_samples,
+        cluster_selection_epsilon=cluster_selection_epsilon,
+        metric=metric,
+        n_jobs=-1,
+    )
+    labels = hdbscan.fit_predict(differences)
 
     # Check if the gene meets the criteria
     if len(set(labels)) > 2:  # More than 1 cluster (excluding noise)
@@ -35,12 +44,22 @@ def process_gene(gene, df, epsilon, min_samples):
 
 
 # Function to perform clustering and save results
-def cluster_gene_differences(df, epsilon, min_samples, output_dir):
+def cluster_gene_differences(df, min_cluster_size, min_samples,
+                             cluster_selection_epsilon, metric, output_dir):
     unique_genes = df["GeneID"].unique()
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
         futures = {
-            executor.submit(process_gene, gene, df, epsilon, min_samples): gene
+            executor.submit(
+                process_gene,
+                gene,
+                df,
+                min_cluster_size,
+                min_samples,
+                cluster_selection_epsilon,
+                metric,
+            ):
+            gene
             for gene in unique_genes
         }
 
@@ -72,16 +91,16 @@ def create_violin_plot(gene_df, gene_id, output_file):
 
 
 # Function to plot and save gene clusters
-def plot_and_save_gene_clusters(df, output_dir):
-    for gene_file in glob.glob(output_dir + "/*_clusters.csv"):
-        gene = os.path.basename(gene_file).split("_")[0]
-        gene_df = df[df["GeneID"] == gene].copy()
-        clusters = pd.read_csv(gene_file, header=None)[1]
-        gene_df["Cluster"] = clusters
+# def plot_and_save_gene_clusters(df, output_dir):
+    # for gene_file in glob.glob(output_dir + "/*_clusters.csv"):
+        # gene = os.path.basename(gene_file).split("_")[0]
+        # gene_df = df[df["GeneID"] == gene].copy()
+        # clusters = pd.read_csv(gene_file, header=None)[1]
+        # gene_df["Cluster"] = clusters
 
         # Plotting
-        plot_file = os.path.join(output_dir, f"{gene}_scatterplot.png")
-        create_violin_plot(gene_df, gene, plot_file)
+        # plot_file = os.path.join(output_dir, f"{gene}_scatterplot.png")
+        # create_violin_plot(gene_df, gene, plot_file)
 
 
 def main():
@@ -100,14 +119,24 @@ def main():
         required=True,
         help="Directory to store output files.",
     )
-    parser.add_argument("--epsilon",
-                        type=float,
-                        default=800,
-                        help="Epsilon value for DBSCAN.")
+    parser.add_argument("--min_cluster_size",
+                        type=int,
+                        default=5,
+                        help="Min cluster size for HDBSCAN.")
     parser.add_argument("--min_samples",
                         type=int,
                         default=20,
-                        help="Minimum samples value for DBSCAN.")
+                        help="Minimum samples value for HDBSCAN.")
+    parser.add_argument(
+        "--cluster_selection_epsilon",
+        type=float,
+        default=0.0,
+        help="Cluster selection epsilon for HDBSCAN",
+    )
+    parser.add_argument("--metric",
+                        type=str,
+                        default="euclidean",
+                        help="Metric for HDBSCAN")
     parser.add_argument(
         "-v",
         "--verbose",
@@ -130,11 +159,17 @@ def main():
 
     df = aggregate_results(args.input_dir)
     logger.info("Read all input files.")
-    clustering_results = cluster_gene_differences(df, args.epsilon,
-                                                  args.min_samples,
-                                                  args.output_dir)
-    logger.info("Written clustering results. Plotting differences now.")
-    plot_and_save_gene_clusters(df, args.output_dir)
+
+    clustering_results = cluster_gene_differences(
+        df,
+        args.min_cluster_size,
+        args.min_samples,
+        args.cluster_selection_epsilon,
+        args.metric,
+        args.output_dir,
+    )
+    # logger.info("Written clustering results. Plotting differences now.")
+    # plot_and_save_gene_clusters(df, args.output_dir)
     logger.success("Complete.")
 
 
