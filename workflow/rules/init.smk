@@ -45,7 +45,7 @@ def _get_sample_from_fn(x):
 # TODO: might be a good idea to serialise BATCHES_FN to disk and read from it, instead of recomputing it every time
 # TODO: it might hammer the disk in cluster envs, depending on the number of batches
 BATCHES_FN = {}
-SAMPLE2BATCHES_FN = {}
+SAMPLE_TO_BATCHES = {}
 res = dir_input().glob("*.txt")
 for x in res:
     b = os.path.basename(x)
@@ -57,10 +57,11 @@ for x in res:
     with open(x) as f:
         for y in f:
             sample_fn = y.strip()
-            if sample_fn:
-                sample = _get_sample_from_fn(sample_fn)
-                SAMPLE2BATCHES_FN[sample] = batch
-                BATCHES_FN[batch][sample] = sample_fn
+            if not sample_fn.endswith(".tar.xz"):
+                continue
+            sample_base = os.path.basename(sample_fn).split(".tar.xz")[0]
+            SAMPLE_TO_BATCHES[sample_fn] = batch
+            BATCHES_FN[batch][sample_base] = sample_fn
 
 GENEBATCHES_FN = []
 res = dir_input().glob("*.ffn")
@@ -89,16 +90,22 @@ def get_genome_batches():
     return BATCHES_FN.keys()
 
 
+def get_samples():
+    return SAMPLE_TO_BATCHES.keys()
+    # print(BATCHES_FN[_batch])
+    # return [i for i in BATCHES_FN[_batch]]
+
+
+def get_batch(_sample):
+    return SAMPLE_TO_BATCHES[_sample]
+
+
+def get_sample_paths(_batch, _sample):
+    return BATCHES_FN[_batch][_sample]
+
+
 def get_gene_batches():
     return GENEBATCHES_FN
-
-
-def get_samples_for_batch(_batch):
-    return [key for key in BATCHES_FN[_batch]]
-
-
-def get_samples():
-    return SAMPLE2BATCHES_FN.keys()
 
 
 #####################################
@@ -106,24 +113,65 @@ def get_samples():
 #####################################
 
 
-def fn_idxpersample(_batch, _sample):
-    return f"{dir_intermediate()}/bwaidx/{_batch}/{_sample}.pac"
+def fn_batchidxdir(_batch, _sample):
+    return f"{dir_intermediate()}/bwaidx/{_batch}/{_sample}"
+
+
+def aggregate_fastmap_raw(wildcards):
+    checkpoint_output = checkpoints.make_bwaidx.get(**wildcards).output[0]
+    return expand(
+        f"{dir_intermediate()}"
+        + "/prefsuffkmers/fastmap/{batch}/{genebatch}-{bucket}-raw.fastmap",
+        batch=wildcards.batch,
+        genebatch=get_gene_batches(),
+        bucket=glob_wildcards(os.path.join(checkpoint_output, "{bucket}.bwt")).bucket,
+    )
+
+
+def aggregate_fastmap_dists(wildcards):
+    checkpoint_output = checkpoints.make_bwaidx.get(**wildcards).output[0]
+    return expand(
+        f"{dir_intermediate()}"
+        + "/fastmap/distances/{batch}/{genebatch}-{bucket}-distances.tsv",
+        batch=wildcards.batch,
+        genebatch=get_gene_batches(),
+        bucket=glob_wildcards(os.path.join(checkpoint_output, "{bucket}.bwt")).bucket,
+    )
+
+
+# def aggregate_indices(wildcards):
+# checkpoint_output = checkpoints.make_bwaidx.get(
+# batch=wildcards.batch, sample=wildcards.sample
+# ).output[0]
+# (extra_files,) = glob_wildcards(os.path.join(checkpoint_output, "{extra}.bwt"))
+# return expand(
+# f"{dir_intermediate()}/{{batch}}/{{sample}}/{{extra}}.bwt",
+# batch=wildcards.batch,
+# sample=wildcards.sample,
+# extra=extra_files,
+# )
 
 
 def fn_prefsuffkmer(_genebatch):
     return f"{dir_intermediate()}/prefsuffkmers/{_genebatch}.ffn"
 
 
-def fn_fastmapraw(_batch, _sample, _genebatch):
-    return f"{dir_intermediate()}/prefsuffkmers/fastmap/{_batch}/{_sample}-{_genebatch}-raw.fastmap"
+def fn_bwaidxbucket(_batch, _bucket):
+    return f"{dir_intermediate()}/bwa_indices/{_batch}/{_bucket}.bwt"
 
 
-def fn_fastmapprocess(_batch, _sample, _genebatch):
-    return f"{dir_intermediate()}/prefsuffkmers/fastmap/{_batch}/{_sample}-{_genebatch}-processed.fastmap"
+def fn_fastmapraw(_batch, _bucket, _genebatch):
+    return (
+        f"{dir_intermediate()}/fastmap/raw/{_batch}/{_genebatch}-{_bucket}-raw.fastmap"
+    )
 
 
-def fn_fastmapdists(_batch, _sample, _genebatch):
-    return f"{dir_intermediate()}/prefsuffkmers/fastmap/{_batch}/{_sample}-{_genebatch}-distances.tsv"
+def fn_fastmapprocess(_batch, _bucket, _genebatch):
+    return f"{dir_intermediate()}/fastmap/processed/{_batch}/{_genebatch}-{_bucket}-processed.fastmap"
+
+
+def fn_fastmapdists(_batch, _bucket, _genebatch):
+    return f"{dir_intermediate()}/fastmap/distances/{_batch}/{_genebatch}-{_bucket}-distances.tsv"
 
 
 def fn_prefsuffkmer(_genebatch):

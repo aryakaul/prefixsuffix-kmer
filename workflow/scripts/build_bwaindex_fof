@@ -1,0 +1,128 @@
+#!/usr/bin/env python3
+import tarfile
+import subprocess
+import os
+import argparse
+import multiprocessing
+from loguru import logger
+import tempfile
+
+
+def parse_arguments():
+    """
+    Parses command line arguments for specifying the file of files (fof_path),
+    batch size, and output directory.
+    """
+    parser = argparse.ArgumentParser(
+        description=
+        "Build BWA indices from a list of tar.xz compressed folders.")
+    parser.add_argument(
+        "fof_path",
+        help="Path to the file containing the list of tar.xz paths.")
+    parser.add_argument(
+        "batch_size",
+        type=int,
+        help="Number of FASTA files to be indexed together in each batch.")
+    parser.add_argument(
+        "-o",
+        "--output",
+        default=None,
+        help="Output directory for the BWA indices. (default: same as tar_path)"
+    )
+    return parser.parse_args()
+
+
+def read_tar_file(tar_path):
+    """
+    Reads a tar.xz file and extracts the names of the FASTA files.
+    This function is designed to be run in a separate process.
+    """
+    with tarfile.open(tar_path, "r:xz") as tar:
+        fasta_names = [member.name for member in tar.getmembers()]
+    return tar_path, fasta_names
+
+
+def extract_fasta_names(fof_path):
+    """
+    Extracts FASTA file names from each tar.xz file listed in the file of files.
+    This is done in parallel using multiprocessing.
+    """
+    with open(fof_path, 'r') as fof:
+        tar_paths = [line.strip() for line in fof]
+
+    with multiprocessing.Pool() as pool:
+        tar_contents = pool.map(read_tar_file, tar_paths)
+
+    return tar_contents
+
+
+def prepare_tasks(tar_contents, batch_size, output_dir):
+    """
+    Prepares tasks for indexing. Each task represents a batch of FASTA files
+    from a tar.xz file that need to be indexed.
+    """
+    task_args = []
+    for tar_path, fasta_names in tar_contents:
+        # Divide the FASTA files into batches
+        for i in range(0, len(fasta_names), batch_size):
+            batch_fasta_names = fasta_names[i:i + batch_size]
+            batch_id = i // batch_size
+            task_args.append(
+                (tar_path, batch_fasta_names, batch_id, output_dir))
+
+    return task_args
+
+
+def index_batch(args):
+    """
+    Creates a BWA index for a batch of FASTA files.
+    This function is designed to be run in a separate process.
+    """
+    tar_path, fasta_names, batch_id, output_dir = args
+    base_tar = os.path.basename(tar_path).split(".tar.xz")[0]
+
+    with tempfile.NamedTemporaryFile(mode='w+b') as temp_fasta:
+        with tarfile.open(tar_path, 'r:xz') as tar:
+            for fasta in fasta_names:
+                member = tar.getmember(fasta)
+                file_content = tar.extractfile(member).read()
+                temp_fasta.write(file_content)
+                temp_fasta.flush()
+
+        index_name = os.path.join(output_dir, f"{base_tar}_{batch_id:03}")
+        subprocess.run(["bwa", "index", "-p", index_name, temp_fasta.name])
+        logger.info(f"Completed indexing for batch {batch_id} in {tar_path}")
+
+
+def process_tar_file(fof_path, batch_size, output_dir):
+    """
+    Processes the given list of tar.xz files to create BWA indices.
+    This involves extracting FASTA file names in parallel and then indexing
+    each batch of FASTA files in parallel.
+    """
+    if not output_dir:
+        output_dir = f"{fof_path}_indices"
+    # output_dir = os.path.join(output_dir, os.path.basename(fof_path).split('.txt')[0])
+    os.makedirs(output_dir, exist_ok=True)
+
+    tar_contents = extract_fasta_names(fof_path)
+    task_args = prepare_tasks(tar_contents, batch_size, output_dir)
+
+    with multiprocessing.Pool() as pool:
+        pool.map(index_batch, task_args)
+
+
+def main():
+    """
+    Main function of the script.
+    """
+    args = parse_arguments()
+    logger.info(f"Starting BWA index creation for files in {args.fof_path}")
+    process_tar_file(args.fof_path, args.batch_size, args.output)
+    logger.info(
+        f"BWA indices created successfully in {args.output if args.output else f'{args.fof_path}_indices'}"
+    )
+
+
+if __name__ == "__main__":
+    main()
