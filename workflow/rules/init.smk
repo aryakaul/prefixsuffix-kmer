@@ -127,9 +127,9 @@ def aggregate_fastmap_dists(wildcards):
         bucket=glob_wildcards(os.path.join(checkpoint_output, "{bucket}.bwt")).bucket,
     )
 
+
 def aggregate_filter_dists(wildcards):
     checkpoint_output = checkpoints.make_bwaidx.get(**wildcards).output[0]
-    return f"{dir_intermediate()}/kmerdists/{_batch}/{_genebatch}-{_bucket}-filterdists.csv"
     return expand(
         f"{dir_intermediate()}"
         + "/kmerdists/{batch}/{genebatch}-{bucket}-filterdists.csv",
@@ -160,8 +160,10 @@ def fn_fastmapprocess(_batch, _bucket, _genebatch):
 def fn_fastmapdists(_batch, _bucket, _genebatch):
     return f"{dir_intermediate()}/fastmap/distances/{_batch}/{_genebatch}-{_bucket}-distances.tsv"
 
+
 def fn_parsedists(_batch, _bucket, _genebatch):
     return f"{dir_intermediate()}/kmerdists/{_batch}/{_genebatch}-{_bucket}-filterdists.csv"
+
 
 def fn_prefsuffkmer(_genebatch):
     return f"{dir_intermediate()}/prefsuffkmers/{_genebatch}-prefsuff-k{config['kmer_length']}-g{config['gap_distance']}.ffn"

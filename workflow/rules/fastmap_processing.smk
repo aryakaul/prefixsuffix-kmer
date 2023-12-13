@@ -16,6 +16,7 @@ rule fastmap_process:
         -o {output}
         """
 
+
 rule fastmap_distances:
     output:
         fn_fastmapdists(_batch="{batch}", _bucket="{bucket}", _genebatch="{genebatch}"),
@@ -38,15 +39,16 @@ rule fastmap_distances:
         -g {params.gap_distance}
         """
 
+
 rule parse_distances:
     output:
-        fn_parsedists(_batch="{batch}", _bucket="{bucket}", _genebatch="{genebatch}")
+        fn_parsedists(_batch="{batch}", _bucket="{bucket}", _genebatch="{genebatch}"),
     input:
-        fn_fastmapdists(_batch="{batch}", _bucket="{bucket}", _genebatch="{genebatch}")
+        fn_fastmapdists(_batch="{batch}", _bucket="{bucket}", _genebatch="{genebatch}"),
     conda:
         "../envs/pandas.yml"
     params:
-        script=snakemake.workflow.srcdir("../scripts/analyze_fastmapout"),
+        script=snakemake.workflow.srcdir("../scripts/parse_distances"),
     shell:
         """
         mkdir -p $(dirname {output})
@@ -54,6 +56,7 @@ rule parse_distances:
         {input} \\
         {output} 
         """
+
 
 rule aggregate:
     input:

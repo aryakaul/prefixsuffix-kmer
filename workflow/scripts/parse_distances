@@ -4,18 +4,23 @@ import argparse
 import pandas as pd
 from loguru import logger
 
+
 def load_data(file_path):
     """
     Load data from a file into a pandas DataFrame.
     """
     try:
-        dtype_dict = {col: str for col in pd.read_csv(file_path, nrows=0, sep='\t').columns}
+        dtype_dict = {
+            col: str
+            for col in pd.read_csv(file_path, nrows=0, sep='\t').columns
+        }
         df = pd.read_csv(file_path, sep='\t', dtype=dtype_dict)
         logger.info("Data loaded successfully from {}", file_path)
         return df
     except Exception as e:
         logger.error("Failed to load data: {}", e)
         raise
+
 
 def preprocess_data(df):
     """
@@ -24,18 +29,20 @@ def preprocess_data(df):
     df['Difference'] = pd.to_numeric(df['Difference'], errors='coerce')
     return df[df['Difference'].notna()].copy()
 
+
 def extract_genome_id(contig_value):
     """
     Extract genome ID from 'Contig' column.
     """
     return contig_value.split('.')[0] if pd.notna(contig_value) else None
 
+
 def find_closest_differences(df):
     """
     Find the rows with 'Difference' closest to 0 for each GenomeID and GeneID pair.
     """
     df['GenomeID'] = df['Contig'].apply(extract_genome_id)
-    
+
     # Function to find the row with closest 'Difference'
     def closest_row(group):
         return group.iloc[(group['Difference'] - 0).abs().argsort()[:1]]
@@ -45,8 +52,9 @@ def find_closest_differences(df):
 
     # Reset index to flatten the DataFrame
     closest_diff_df.reset_index(drop=True, inplace=True)
-    
+
     return closest_diff_df
+
 
 def save_to_file(df, output_file):
     """
@@ -64,7 +72,8 @@ def main():
     """
     Main function to run the analysis.
     """
-    parser = argparse.ArgumentParser(description="Analyze genomic data for closest differences.")
+    parser = argparse.ArgumentParser(
+        description="Analyze genomic data for closest differences.")
     parser.add_argument("file_path", help="Path to the genomic data file")
     parser.add_argument("output", help="Path to the output dataframe file")
 
@@ -75,8 +84,9 @@ def main():
     closest_diff_df = find_closest_differences(filtered_df)
     logger.info("Found closest differences per genome/gene!")
     # logger.info("Closest differences per genome:\n{}", closest_diff_df)
-    save_to_file(closest_diff_df, args.output_file)
-    logger.success(f"File saved to {args.output_file}")
+    save_to_file(closest_diff_df, args.output)
+    logger.success(f"File saved to {args.output}")
+
 
 if __name__ == "__main__":
     main()

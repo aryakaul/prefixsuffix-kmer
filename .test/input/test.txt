@@ -1,2 +1,2 @@
-input/isolates/GGCGS_1batch.tar.xz
-input/isolates/GGCGS_2batch.tar.xz
+input/isolates/GCGS_1batch.tar.xz
+input/isolates/GCGS_2batch.tar.xz
