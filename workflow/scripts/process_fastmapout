@@ -10,6 +10,7 @@ def parse_fastmap_output(file_path):
     parsed_kmers = 0
     parsed_data = []
     with open(file_path, "r") as file:
+        genome_id = None
         seq_id = None
         for line in file:
             if line.startswith("SQ"):
@@ -25,12 +26,14 @@ def parse_fastmap_output(file_path):
                 logger.debug(f"{num_mappings} mappings found for {seq_id}")
                 for mapping in mappings:
                     contigid, location = mapping.split(":")
-                    parsed_data.append([seq_id, contigid, location])
+                    genome_id = contigid.split('.')[0]
+                    parsed_data.append([genome_id, seq_id, contigid, location])
                 wrote = True
             else:
                 if wrote == False:
-                    parsed_data.append([seq_id, "Null", "Null"])
+                    parsed_data.append([genome_id, seq_id, "Null", "Null"])
                 seq_id = None
+                genome_id = None
             if parsed_kmers % 2000000 == 0:
                 logger.info(
                     f"Parsed {int(parsed_kmers/2)} prefix/suffix kmers!")
@@ -39,9 +42,9 @@ def parse_fastmap_output(file_path):
 
 def write_to_tsv(data, output):
     with open(output, "w") as o:
-        o.write("kmerID\tContig\tLocation\n")
+        o.write("genomeID\tkmerID\tContig\tLocation\n")
         for lines in data:
-            o.write(f"{lines[0]}\t{lines[1]}\t{lines[2]}\n")
+            o.write(f"{lines[0]}\t{lines[1]}\t{lines[2]}\t{lines[3]}\n")
     logger.info(f"Wrote output to {output}")
 
 

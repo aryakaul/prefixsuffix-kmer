@@ -21,7 +21,9 @@ def write_distances(group, file, k, g):
                 distance = abs(
                     int(suffix_row["Location"]) -
                     int(prefix_row["Location"])) + k + 2 * g
-                length = int(prefix_row['GeneID'].split("-")[1][3:])
+                # print(prefix_row['GeneID'])
+                # print(prefix_row['GeneID'].split('-')[-1])
+                length = int(prefix_row['GeneID'].split("-")[-1][3:])
                 difference = distance - length
             else:
                 if prefix_row['Contig'] != suffix_row['Contig']:
