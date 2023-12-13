@@ -7,7 +7,7 @@ checkpoint cluster_dists:
         "../envs/sklearn.yml"
     params:
         epsilon=config['max_distance'],
-        min_samples=config['min_samples']
+        min_samples=config['min_samples'],
         intermediate=config['intermediate_dir'],
         script=snakemake.workflow.srcdir("../scripts/cluster_dists"),
     shell:
