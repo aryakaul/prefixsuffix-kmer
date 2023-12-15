@@ -2,7 +2,8 @@
 
 <p>
 Workflow for identifying putative gene fusion events through rapid k-mer matching. 
-
+   
+[![Tests](https://github.com/aryakaul/prefixsuffix-kmer/actions/workflows/main.yaml/badge.svg)](https://github.com/aryakaul/prefixsuffix-kmer/actions/workflows/main.yaml)
 <!--For more information, see the <a href="LOLSOON">associated paper</a>.-->
 </p><br/>
 
