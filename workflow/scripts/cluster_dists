@@ -78,14 +78,21 @@ def cluster_gene_differences(df, epsilon, min_samples, output_dir):
 
             # Creating a copy only for saving and plotting
             gene_specific_df = df[mask].copy()
-            create_violin_plot(gene_specific_df, gene, os.path.join(output_dir, f"{gene}_scatterplot.svg"))
-            gene_specific_df.to_csv(os.path.join(output_dir, f"{gene}_clusters.csv"), index=False)
+            create_violin_plot(
+                gene_specific_df, gene,
+                os.path.join(output_dir, f"{gene}_scatterplot.svg"))
+            gene_specific_df.to_csv(os.path.join(output_dir,
+                                                 f"{gene}_clusters.csv"),
+                                    index=False)
 
 
 # Function to create violin plots for each gene
 def create_violin_plot(gene_df, gene_id, output_file):
     plt.figure(figsize=(10, 6))
-    sns.violinplot(x="Cluster", y="Difference", data=gene_df.loc[gene_df['Cluster'] != -1], inner="quartile")
+    sns.violinplot(x="Cluster",
+                   y="Difference",
+                   data=gene_df.loc[gene_df['Cluster'] != -1],
+                   inner="quartile")
     plt.title(f"Violin Plot of Differences for Gene: {gene_id}")
     plt.xlabel("Cluster Assignment")
     plt.ylabel("Difference")
