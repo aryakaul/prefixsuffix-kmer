@@ -4,7 +4,7 @@ checkpoint make_bwaidx:
     input:
         fof=f"{dir_input()}" + "/{batch}.txt",
     params:
-        script=snakemake.workflow.srcdir("../scripts/build_bwaindex_fof"),
+        script=Path(workflow.basedir) / "scripts/build_bwaindex_fof",
         samplesperidx=config["batch_size"],
     conda:
         "../envs/bwamem.yml"

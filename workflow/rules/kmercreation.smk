@@ -6,7 +6,8 @@ rule prefixsuffix_kmergen:
     conda:
         "../envs/biopython.yml"
     params:
-        script=snakemake.workflow.srcdir("../scripts/prefsuff_kmerextraction"),
+        #script=workflow.source_path("../scripts/prefsuff_kmerextraction"),
+        script=Path(workflow.basedir) / "scripts/prefsuff_kmerextraction",
         kmer_length=config["kmer_length"],
         gap_dist=config["gap_distance"],
     shell:

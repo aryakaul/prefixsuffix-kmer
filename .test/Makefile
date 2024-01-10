@@ -35,7 +35,7 @@ endif
 CONDA_DIR_ADJ = $(TOPDIR)/$(CONDA_DIR)
 
 ifeq ($(strip $(USE_CONDA)),True)
-	CONDA_PARAMS  =	--use-conda --conda-prefix="$(CONDA_DIR_ADJ)"
+	CONDA_PARAMS  =	--software-deployment-method conda --conda-prefix="$(CONDA_DIR_ADJ)"
 endif
 
 
@@ -44,7 +44,7 @@ endif
 ######################
 
 all: ## Run everything
-	snakemake -j $(CONDA_PARAMS) -p --rerun-incomplete $(SNAKEMAKE_PARAM_DIR)
+	snakemake --cores all $(CONDA_PARAMS) -p --rerun-incomplete $(SNAKEMAKE_PARAM_DIR)
 
 help: ## Print help messages
 	@printf "$$(grep -hE '^\S*(:.*)?##' $(MAKEFILE_LIST) \
@@ -52,11 +52,10 @@ help: ## Print help messages
         | column -c2 -t -s : )\n"
 
 conda: ## Create the conda environments
-	snakemake -p -j -d .test $(CONDA_PARAMS) --conda-create-envs-only
+	snakemake -p --cores all -d .test $(CONDA_PARAMS) --conda-create-envs-only
 
-clean: ## Clean all output archives and files with statistics
-	rm -fvr output/* intermediate/stats/*
-	find intermediate -name '*.gfa' -or -name '*.hist'  | xargs rm -fv
+clean: ## Clean all output archives and intermediate files
+	rm -fvr output/* intermediate/*
 	@if [ -d ".test" ]; then \
 		$(MAKE) -C .test clean; \
 	fi
@@ -86,7 +85,7 @@ viewconf: ## View configuration without comments
 	@#| grep -Ev ^$$
 
 reports: ## Create html report
-	snakemake -j $(CONDA_PARAMS) -p --rerun-incomplete $(SNAKEMAKE_PARAM_DIR) --report report.html
+	#snakemake --cores all $(CONDA_PARAMS) -p --rerun-incomplete $(SNAKEMAKE_PARAM_DIR) --report report.html
 	@if [ -d ".test" ]; then \
 		$(MAKE) -C .test reports; \
 	fi
@@ -97,7 +96,7 @@ reports: ## Create html report
 ####################
 
 test: ## Run the workflow on test data
-	#snakemake -d .test -j $(CONDA_PARAMS) -p --show-failed-logs --rerun-incomplete
+	#snakemake -d .test --cores $(CONDA_PARAMS) -p --show-failed-logs --rerun-incomplete
 	@if [ -d ".test" ]; then \
 		$(MAKE) -C .test; \
 	fi
