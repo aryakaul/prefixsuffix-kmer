@@ -1,4 +1,4 @@
-from snakemake.utils import validate
+#from snakemake.utils import validate
 import collections
 import glob
 from pprint import pprint

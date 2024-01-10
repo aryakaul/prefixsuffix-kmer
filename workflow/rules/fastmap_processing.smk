@@ -8,7 +8,7 @@ rule fastmap_process:
     conda:
         "../envs/biopython.yml"
     params:
-        script=snakemake.workflow.srcdir("../scripts/process_fastmapout"),
+        script=Path(workflow.basedir) / "scripts/process_fastmapout",
     shell:
         """
         {params.script} \\
@@ -27,7 +27,7 @@ rule fastmap_distances:
     conda:
         "../envs/pandas.yml"
     params:
-        script=snakemake.workflow.srcdir("../scripts/analyze_fastmapout"),
+        script=Path(workflow.basedir) / "scripts/analyze_fastmapout",
         kmer_length=config["kmer_length"],
         gap_distance=config["gap_distance"],
     shell:
@@ -48,7 +48,7 @@ rule parse_distances:
     conda:
         "../envs/pandas.yml"
     params:
-        script=snakemake.workflow.srcdir("../scripts/parse_distances"),
+        script=Path(workflow.basedir) / "scripts/parse_distances",
     shell:
         """
         mkdir -p $(dirname {output})
