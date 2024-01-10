@@ -9,7 +9,8 @@ checkpoint cluster_dists:
         epsilon=config['max_distance'],
         min_samples=config['min_samples'],
         intermediate=config['intermediate_dir'],
-        script=snakemake.workflow.srcdir("../scripts/cluster_dists"),
+        #script=workflow.source_path("../scripts/cluster_dists"),
+        script=Path(workflow.basedir) / "scripts/cluster_dists",
     shell:
         """
         mkdir -p {output}
