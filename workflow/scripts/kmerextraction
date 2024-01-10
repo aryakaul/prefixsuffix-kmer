@@ -34,11 +34,11 @@ def process_fasta(input_fasta, k, g, n, output_fasta):
             end = start + k
             if end <= sequence_length - g:
                 kmer = sequence[start:end]
-                record = SeqRecord(
+                kmerrecord = SeqRecord(
                     kmer,
                     id=f"{record.id}-len{sequence_length}_k{k}_{i+1}of{n}",
                     description="")
-                output_records.append(record)
+                output_records.append(kmerrecord)
             else:
                 logger.warning(
                     "No k-mer written! {record.id} is too short for specified k/n/g!"
