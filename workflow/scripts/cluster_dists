@@ -23,10 +23,14 @@ def aggregate_results(folder_path):
 def process_gene(gene, df, epsilon, min_samples):
     logger.debug(f"Processing gene: {gene}")
     gene_data = df[df["GeneID"] == gene]
+    logger.debug(f"Acquired gene data")
     differences = gene_data["Difference"].values.reshape(-1, 1)
-    dbscan = DBSCAN(eps=epsilon, min_samples=min_samples)
+    logger.debug(f"Clustering differences")
+    dbscan = DBSCAN(eps=epsilon, min_samples=min_samples, n_jobs=-1)
+    logger.debug(f"Fitting labels")
     labels = dbscan.fit_predict(differences)
 
+    logger.debug(f"Checking gene labesl")
     # Check if the gene meets the criteria
     if len(set(labels)) > 2:  # More than 1 cluster (excluding noise)
         logger.info(f"{gene} passed filter.")
@@ -35,7 +39,7 @@ def process_gene(gene, df, epsilon, min_samples):
 
 
 # Function to perform clustering and save results
-def cluster_gene_differences(df, epsilon, min_samples, output_dir):
+def cluster_gene_differences_threaded(df, epsilon, min_samples, output_dir):
     unique_genes = df["GeneID"].unique()
 
     with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -60,14 +64,32 @@ def cluster_gene_differences(df, epsilon, min_samples, output_dir):
                                index=False)
 
 
+# Function to perform clustering and save results
+def cluster_gene_differences(df, epsilon, min_samples, output_dir):
+    unique_genes = df["GeneID"].unique()
+
+    for gene in unique_genes:
+        gene, labels, is_worthy = process_gene(gene, df, epsilon, min_samples)
+
+        if is_worthy:
+            # Use a boolean mask for assignment to avoid setting-with-copy warning
+            mask = df["GeneID"] == gene
+            df.loc[mask, "Cluster"] = labels
+
+            # Creating a copy only for saving and plotting
+            gene_specific_df = df[mask].copy()
+            create_violin_plot(gene_specific_df, gene, os.path.join(output_dir, f"{gene}_scatterplot.svg"))
+            gene_specific_df.to_csv(os.path.join(output_dir, f"{gene}_clusters.csv"), index=False)
+
+
 # Function to create violin plots for each gene
 def create_violin_plot(gene_df, gene_id, output_file):
     plt.figure(figsize=(10, 6))
-    sns.violinplot(x="Cluster", y="Difference", data=gene_df, inner="quartile")
+    sns.violinplot(x="Cluster", y="Difference", data=gene_df.loc[gene_df['Cluster'] != -1], inner="quartile")
     plt.title(f"Violin Plot of Differences for Gene: {gene_id}")
     plt.xlabel("Cluster Assignment")
     plt.ylabel("Difference")
-    plt.savefig(output_file)
+    plt.savefig(output_file, dpi=200)
     plt.close()
 
 
