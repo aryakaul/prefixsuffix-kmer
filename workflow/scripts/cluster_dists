@@ -10,43 +10,61 @@ from loguru import logger
 from sklearn.cluster import DBSCAN
 import seaborn as sns
 import matplotlib.pyplot as plt
+from matplotlib.collections import PathCollection
 import concurrent.futures
 
+def read_and_filter_csv(file):
+    df = pd.read_csv(file)
+    # Filter out columns that are entirely NA
+    filtered_df = df.dropna(axis=1, how='all')
+    return filtered_df
 
 # Function to read all CSV files and concatenate them into a single DataFrame
 def aggregate_results(folder_path):
     all_files = glob.glob(folder_path + "/*.csv")
-    return pd.concat((pd.read_csv(f) for f in all_files), ignore_index=True)
+    return pd.concat((read_and_filter_csv(f) for f in all_files), ignore_index=True)
 
 
 # Function to process a single gene
-def process_gene(gene, df, epsilon, min_samples):
+def process_gene(gene, gene_data, epsilon, min_samples, output_dir):
     logger.debug(f"Processing gene: {gene}")
-    gene_data = df[df["GeneID"] == gene]
-    logger.debug(f"Acquired gene data")
     differences = gene_data["Difference"].values.reshape(-1, 1)
+    # Plot distance distribution
+    create_violin_plot(
+        gene_data, gene,
+        os.path.join(output_dir, "differencedist_plots",
+                     f"{gene}_scatterplot.png"))
+
     logger.debug(f"Clustering differences")
-    dbscan = DBSCAN(eps=epsilon, min_samples=min_samples, n_jobs=-1)
+    dbscan = DBSCAN(eps=epsilon, min_samples=min_samples, n_jobs=1)
     logger.debug(f"Fitting labels")
     labels = dbscan.fit_predict(differences)
 
-    logger.debug(f"Checking gene labesl")
+    logger.debug(f"Checking gene labels")
     # Check if the gene meets the criteria
-    if len(set(labels)) > 2:  # More than 1 cluster (excluding noise)
-        logger.info(f"{gene} passed filter.")
-        return gene, labels, True
+    label_set = set(labels)
+    if "-1" in label_set:
+        if len(set(labels)) > 2:  # More than 1 cluster (excluding noise)
+            logger.info(f"{gene} passed filter.")
+            return gene, labels, True
+    else:
+        if len(set(labels)) > 1:  # More than 1 cluster (excluding noise)
+            logger.info(f"{gene} passed filter.")
+            return gene, labels, True
     return gene, labels, False
 
 
 # Function to perform clustering and save results
 def cluster_gene_differences_threaded(df, epsilon, min_samples, output_dir):
-    unique_genes = df["GeneID"].unique()
+    # unique_genes = df["GeneID"].unique()
+    grouped_data = df.groupby('GeneID')
 
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = {
-            executor.submit(process_gene, gene, df, epsilon, min_samples): gene
-            for gene in unique_genes
-        }
+    # with concurrent.futures.ThreadPoolExecutor() as executor:
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        futures = {}
+        for gene, gene_data in grouped_data:
+            futures[executor.submit(process_gene, gene, gene_data, epsilon,
+                                    min_samples, output_dir)] = gene
 
         for future in concurrent.futures.as_completed(futures):
             gene, labels, is_worthy = future.result()
@@ -56,7 +74,7 @@ def cluster_gene_differences_threaded(df, epsilon, min_samples, output_dir):
                 gene_df["Cluster"] = labels
 
                 # Plotting and saving
-                create_violin_plot(
+                create_violin_plot_ofclusters(
                     gene_df, gene,
                     os.path.join(output_dir, f"{gene}_scatterplot.png"))
                 gene_df.to_csv(os.path.join(output_dir,
@@ -86,30 +104,61 @@ def cluster_gene_differences(df, epsilon, min_samples, output_dir):
                                     index=False)
 
 
-# Function to create violin plots for each gene
+# Function to plot difference distribution for a gene
 def create_violin_plot(gene_df, gene_id, output_file):
     plt.figure(figsize=(10, 6))
-    sns.violinplot(x="Cluster",
-                   y="Difference",
-                   data=gene_df.loc[gene_df['Cluster'] != -1],
-                   inner="quartile")
-    plt.title(f"Violin Plot of Differences for Gene: {gene_id}")
-    plt.xlabel("Cluster Assignment")
-    plt.ylabel("Difference")
+
+    ax = sns.violinplot(x="Difference", data=gene_df, fill=False, color="black")
+    for artist in ax.lines:
+        artist.set_zorder(10)
+    for artist in ax.findobj(PathCollection):
+        artist.set_zorder(11)
+
+    sns.stripplot(x="Difference",
+                  data=gene_df,
+                  jitter=True,
+                  ax=ax,
+                  orient="h",
+                  alpha=0.8,
+                  color="grey",
+                  zorder=1)
+    plt.title(f"Difference Distribution (bp) for Gene: {gene_id}")
+    plt.xlabel("")
+    sns.despine()
     plt.savefig(output_file, dpi=200)
     plt.close()
 
 
-# Function to plot and save gene clusters
-# def plot_and_save_gene_clusters(df, output_dir):
-# for gene_file in glob.glob(output_dir + "/*_clusters.csv"):
-# gene = os.path.basename(gene_file).split("_")[0]
-# gene_df = df[df["GeneID"] == gene].copy()
-# clusters = pd.read_csv(gene_file, header=None)[1]
-# gene_df["Cluster"] = clusters
+# Function to create violin plots for each gene
+def create_violin_plot_ofclusters(gene_df, gene_id, output_file):
+    plt.figure(figsize=(10, 6))
 
-# plot_file = os.path.join(output_dir, f"{gene}_scatterplot.png")
-# create_violin_plot(gene_df, gene, plot_file)
+    ax = sns.violinplot(
+        x="Cluster",
+        y="Difference",
+        data=gene_df.loc[gene_df['Cluster'] != -1],
+        fill=False,
+        color="black",
+    )
+    for artist in ax.lines:
+        artist.set_zorder(10)
+    for artist in ax.findobj(PathCollection):
+        artist.set_zorder(11)
+
+    sns.stripplot(x="Cluster",
+                  y="Difference",
+                  data=gene_df.loc[gene_df['Cluster'] != -1],
+                  jitter=True,
+                  ax=ax,
+                  alpha=0.8,
+                  color="grey",
+                  zorder=1)
+    plt.title(f"Cluster Difference Distribution (bp) for Gene: {gene_id}")
+    plt.xlabel("Cluster Assignment")
+    plt.ylabel("Difference (bp)")
+    sns.despine()
+    plt.savefig(output_file, dpi=200)
+    plt.close()
 
 
 def main():
@@ -156,11 +205,12 @@ def main():
         logger.remove()
         logger.add(sys.stderr, level="DEBUG")
 
+    os.makedirs(os.path.join(args.output_dir, "differencedist_plots"),
+                exist_ok=True)
     df = aggregate_results(args.input_dir)
     logger.info("Read all input files.")
-    clustering_results = cluster_gene_differences(df, args.epsilon,
-                                                  args.min_samples,
-                                                  args.output_dir)
+    clustering_results = cluster_gene_differences_threaded(
+        df, args.epsilon, args.min_samples, args.output_dir)
     # logger.info("Written clustering results. Plotting differences now.")
     # plot_and_save_gene_clusters(df, args.output_dir)
     logger.success("Complete.")
