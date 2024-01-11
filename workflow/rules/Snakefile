@@ -389,7 +389,7 @@ def aggregate_prefsuffixkmers(wildcards):
     # protein_names = [os.path.basename(p) for p in protein_dirs if "fastmap" not in p and "REPRESENTATIVE" not in p and "varproteindir" not in p and "variableproteins" not in p]
     return expand(
         main_dir(
-            f"variableproteins/{{proteins}}/REPRESENTATIVE/k{KMERSIZE}_offset{OFFSET}-prefsuffixkmers.fasta"
+            f"variableproteins/{proteins}/REPRESENTATIVE/k{KMERSIZE}_offset{OFFSET}-prefsuffixkmers.fasta"
         ),
         proteins=protein_names,
     )
@@ -412,7 +412,7 @@ def aggregate_collatedprocessed_fastmap(wildcards):
     protein_dirs = glob.glob(checkpoint_output + "/*")
     protein_names = [os.path.basename(p) for p in protein_dirs]
     return expand(
-        main_dir(f"variableproteins/{{proteins}}/collated_fastmap"),
+        main_dir(f"variableproteins/{proteins}/collated_fastmap"),
         proteins=protein_names,
     )
 

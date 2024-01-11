@@ -99,8 +99,14 @@ def main():
         logger.add(sys.stderr, level="DEBUG")
 
     df = pd.read_csv(args.input, sep="\t")
-    df[["GeneID", "KmerType"]] = df["kmerID"].str.rsplit("_", n=3,
-                                                         expand=True)[[0, 1]]
+    # df[["GeneID", "KmerType"]] = df["kmerID"].str.rsplit("_", n=3,
+    # expand=True)[[0, 1]]
+
+    # Regular expression to match the pattern
+    pattern = r'(.+?-len\d+)(_.+)$'
+
+    # Extracting and creating new columns
+    df[['GeneID', 'KmerType']] = df['kmerID'].str.extract(pattern)
 
     with open(args.output, "w") as file:
         file.write(

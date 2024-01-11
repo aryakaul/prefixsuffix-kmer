@@ -21,6 +21,7 @@ use_conda:            True # build conda environments automatically by Snakemake
 #     - batch size is
 kmer_length:            25
 gap_distance:           4
+number_kmers:           20
 batch_size:             500
   
 
