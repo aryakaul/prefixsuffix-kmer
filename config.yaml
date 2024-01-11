@@ -16,11 +16,12 @@ use_conda:            True # build conda environments automatically by Snakemake
 ##############
 
 # (1) General parameters; notes:
-#     - kmer length defines k for dBGs 
+#     - kmer length is
 #     - gap distance is
 #     - batch size is
 kmer_length:            25
 gap_distance:           4
+
 batch_size:             500
   
 

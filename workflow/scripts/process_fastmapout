@@ -50,9 +50,7 @@ def write_to_tsv(data, output):
 
 def main():
     parser = argparse.ArgumentParser(
-        description=
-        "Extract k-mer sequences from a genome based on a provided locus tag and TSV file."
-    )
+        description="Read in raw fastmap output and parse it into a tsv file")
 
     parser.add_argument(
         "-i",

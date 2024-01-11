@@ -6,9 +6,9 @@ checkpoint cluster_dists:
     conda:
         "../envs/sklearn.yml"
     params:
-        epsilon=config['max_distance'],
-        min_samples=config['min_samples'],
-        intermediate=config['intermediate_dir'],
+        epsilon=config["max_distance"],
+        min_samples=config["min_samples"],
+        intermediate=config["intermediate_dir"],
         #script=workflow.source_path("../scripts/cluster_dists"),
         script=Path(workflow.basedir) / "scripts/cluster_dists",
     shell:
@@ -22,11 +22,12 @@ checkpoint cluster_dists:
                 -vv 
         """
 
+
 rule aggregate_2:
     input:
         aggregate_passing_genes,
     output:
-        f"{dir_output()}" + "/passing_genes-{batch}-{genebatch}.txt"
+        f"{dir_output()}" + "/passing_genes-{batch}-{genebatch}.txt",
     shell:
         """
         echo {input} > {output}

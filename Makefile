@@ -44,7 +44,7 @@ endif
 ######################
 
 all: ## Run everything
-	snakemake --cores $(CONDA_PARAMS) -p --rerun-incomplete $(SNAKEMAKE_PARAM_DIR)
+	snakemake --cores all $(CONDA_PARAMS) -p --rerun-incomplete $(SNAKEMAKE_PARAM_DIR)
 
 help: ## Print help messages
 	@printf "$$(grep -hE '^\S*(:.*)?##' $(MAKEFILE_LIST) \
@@ -52,7 +52,7 @@ help: ## Print help messages
         | column -c2 -t -s : )\n"
 
 conda: ## Create the conda environments
-	snakemake -p --cores -d .test $(CONDA_PARAMS) --conda-create-envs-only
+	snakemake -p --cores all -d .test $(CONDA_PARAMS) --conda-create-envs-only
 
 clean: ## Clean all output archives and intermediate files
 	rm -fvr output/* intermediate/*
@@ -85,7 +85,7 @@ viewconf: ## View configuration without comments
 	@#| grep -Ev ^$$
 
 reports: ## Create html report
-	snakemake --cores $(CONDA_PARAMS) -p --rerun-incomplete $(SNAKEMAKE_PARAM_DIR) --report report.html
+	snakemake --cores all $(CONDA_PARAMS) -p --rerun-incomplete $(SNAKEMAKE_PARAM_DIR) --report report.html
 	@if [ -d ".test" ]; then \
 		$(MAKE) -C .test reports; \
 	fi
