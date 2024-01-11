@@ -13,16 +13,19 @@ import matplotlib.pyplot as plt
 from matplotlib.collections import PathCollection
 import concurrent.futures
 
+
 def read_and_filter_csv(file):
     df = pd.read_csv(file)
     # Filter out columns that are entirely NA
     filtered_df = df.dropna(axis=1, how='all')
     return filtered_df
 
+
 # Function to read all CSV files and concatenate them into a single DataFrame
 def aggregate_results(folder_path):
     all_files = glob.glob(folder_path + "/*.csv")
-    return pd.concat((read_and_filter_csv(f) for f in all_files), ignore_index=True)
+    return pd.concat((read_and_filter_csv(f) for f in all_files),
+                     ignore_index=True)
 
 
 # Function to process a single gene
@@ -41,7 +44,8 @@ def process_gene(gene, gene_data, epsilon, min_samples, output_dir):
     # Your existing plotting code
     create_violin_plot(
         gene_data, gene,
-        os.path.join(output_dir, "differencedist_plots", f"{gene}_scatterplot.png"))
+        os.path.join(output_dir, "differencedist_plots",
+                     f"{gene}_scatterplot.png"))
 
     logger.debug(f"Clustering differences")
     dbscan = DBSCAN(eps=epsilon, min_samples=min_samples, n_jobs=1)
@@ -57,19 +61,20 @@ def process_gene(gene, gene_data, epsilon, min_samples, output_dir):
     if (-1 in label_set and len(label_set) <= 2) or len(label_set) < 2:
         return gene, None, False
 
-    logger.info(f"{gene} passed filter with the following clusters: {label_set}")
+    logger.info(
+        f"{gene} passed filter with the following clusters: {label_set}")
     # Create a mapping from unique values to labels
     mapping = dict(zip(gene_data_unique["Difference"], labels))
     return gene, mapping, True
     # mapping = dict(zip(gene_data_unique["Difference"], labels))
     # if "-1" in label_set:
-        # if len(label_set) > 2:  # More than 1 cluster (excluding noise)
-            # logger.info(f"{gene} passed filter.")
-            # return gene, labels, True
+    # if len(label_set) > 2:  # More than 1 cluster (excluding noise)
+    # logger.info(f"{gene} passed filter.")
+    # return gene, labels, True
     # else:
-        # if len(label_set) > 1:  # More than 1 cluster (excluding noise)
-            # logger.info(f"{gene} passed filter.")
-            # return gene, labels, True
+    # if len(label_set) > 1:  # More than 1 cluster (excluding noise)
+    # logger.info(f"{gene} passed filter.")
+    # return gene, labels, True
     # return gene, None, False
 
 
@@ -127,7 +132,10 @@ def cluster_gene_differences(df, epsilon, min_samples, output_dir):
 def create_violin_plot(gene_df, gene_id, output_file):
     plt.figure(figsize=(10, 6))
 
-    ax = sns.violinplot(x="Difference", data=gene_df, fill=False, color="black")
+    ax = sns.violinplot(x="Difference",
+                        data=gene_df,
+                        fill=False,
+                        color="black")
     for artist in ax.lines:
         artist.set_zorder(10)
     for artist in ax.findobj(PathCollection):
