@@ -3,6 +3,7 @@
 import scipy
 import sys
 import pandas as pd
+import re
 import glob
 import os
 import argparse
@@ -24,8 +25,14 @@ def read_and_filter_csv(file):
 # Function to read all CSV files and concatenate them into a single DataFrame
 def aggregate_results(folder_path):
     all_files = glob.glob(folder_path + "/*.csv")
-    return pd.concat((read_and_filter_csv(f) for f in all_files),
-                     ignore_index=True)
+    df = pd.DataFrame()
+    for f in all_files:
+        indiv_data = read_and_filter_csv(f)
+        basename_f = os.path.basename(f)
+        bucket_f = re.sub(r"(_\d+)-filterdists\.csv", "", basename_f)
+        indiv_data['Bucket'] = bucket_f
+        df = pd.concat((df, indiv_data), ignore_index=True)
+    return df
 
 
 # Function to process a single gene
@@ -44,7 +51,7 @@ def process_gene(gene, gene_data, epsilon, min_samples, output_dir):
     # Your existing plotting code
     create_violin_plot(
         gene_data, gene,
-        os.path.join(output_dir, "differencedist_plots",
+        os.path.join(output_dir, "all_differencedist_plots",
                      f"{gene}_scatterplot.png"))
 
     logger.debug(f"Clustering differences")
@@ -87,36 +94,15 @@ def cluster_gene_differences_threaded(df, epsilon, min_samples, output_dir):
             if is_worthy:
                 gene_df = df[df["GeneID"] == gene].copy()
                 gene_df["Cluster"] = gene_df['Difference'].map(mapping)
+                outdir = os.path.join(output_dir, "passing_genes", gene)
+                os.makedirs(outdir, exist_ok=True)
 
                 # Plotting and saving
                 create_violin_plot_ofclusters(
                     gene_df, gene,
-                    os.path.join(output_dir, f"{gene}_scatterplot.png"))
-                gene_df.to_csv(os.path.join(output_dir,
-                                            f"{gene}_clusters.csv"),
+                    os.path.join(outdir, f"{gene}_scatterplot.png"))
+                gene_df.to_csv(os.path.join(outdir, f"{gene}_clusters.csv"),
                                index=False)
-
-
-# Function to perform clustering and save results
-def cluster_gene_differences(df, epsilon, min_samples, output_dir):
-    unique_genes = df["GeneID"].unique()
-
-    for gene in unique_genes:
-        gene, mapping, is_worthy = process_gene(gene, df, epsilon, min_samples)
-
-        if is_worthy:
-            # Use a boolean mask for assignment to avoid setting-with-copy warning
-            mask = df["GeneID"] == gene
-            df.loc[mask, "Cluster"] = df.loc[mask, "Difference"].map(mapping)
-
-            # Creating a copy only for saving and plotting
-            gene_specific_df = df[mask].copy()
-            create_violin_plot(
-                gene_specific_df, gene,
-                os.path.join(output_dir, f"{gene}_scatterplot.svg"))
-            gene_specific_df.to_csv(os.path.join(output_dir,
-                                                 f"{gene}_clusters.csv"),
-                                    index=False)
 
 
 # Function to plot difference distribution for a gene
@@ -223,14 +209,14 @@ def main():
         logger.remove()
         logger.add(sys.stderr, level="DEBUG")
 
-    os.makedirs(os.path.join(args.output_dir, "differencedist_plots"),
+    os.makedirs(os.path.join(args.output_dir, "all_differencedist_plots"),
                 exist_ok=True)
+    passinggenesdir = os.path.join(args.output_dir, "passing_genes")
+    os.makedirs(passinggenesdir, exist_ok=True)
     df = aggregate_results(args.input_dir)
     logger.info("Read all input files.")
     clustering_results = cluster_gene_differences_threaded(
         df, args.epsilon, args.min_samples, args.output_dir)
-    # logger.info("Written clustering results. Plotting differences now.")
-    # plot_and_save_gene_clusters(df, args.output_dir)
     logger.success("Complete.")
 
 
