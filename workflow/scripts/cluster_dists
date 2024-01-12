@@ -51,11 +51,13 @@ def process_gene(gene, gene_data, epsilon, min_samples, output_dir):
     dbscan = DBSCAN(eps=epsilon, min_samples=min_samples, n_jobs=1)
 
     logger.debug(f"Fitting labels")
+
     # Use sample_weight in DBSCAN
     sample_weight = value_counts.loc[gene_data_unique["Difference"]].values
     labels = dbscan.fit_predict(differences, sample_weight=sample_weight)
 
     logger.debug(f"Checking gene labels")
+
     # Check if the gene meets the criteria
     label_set = set(labels)
     if (-1 in label_set and len(label_set) <= 2) or len(label_set) < 2:
@@ -63,27 +65,16 @@ def process_gene(gene, gene_data, epsilon, min_samples, output_dir):
 
     logger.info(
         f"{gene} passed filter with the following clusters: {label_set}")
+
     # Create a mapping from unique values to labels
     mapping = dict(zip(gene_data_unique["Difference"], labels))
     return gene, mapping, True
-    # mapping = dict(zip(gene_data_unique["Difference"], labels))
-    # if "-1" in label_set:
-    # if len(label_set) > 2:  # More than 1 cluster (excluding noise)
-    # logger.info(f"{gene} passed filter.")
-    # return gene, labels, True
-    # else:
-    # if len(label_set) > 1:  # More than 1 cluster (excluding noise)
-    # logger.info(f"{gene} passed filter.")
-    # return gene, labels, True
-    # return gene, None, False
 
 
 # Function to perform clustering and save results
 def cluster_gene_differences_threaded(df, epsilon, min_samples, output_dir):
-    # unique_genes = df["GeneID"].unique()
     grouped_data = df.groupby('GeneID')
 
-    # with concurrent.futures.ThreadPoolExecutor() as executor:
     with concurrent.futures.ProcessPoolExecutor() as executor:
         futures = {}
         for gene, gene_data in grouped_data:

@@ -121,7 +121,7 @@ def aggregate_fastmap_dists(wildcards):
     checkpoint_output = checkpoints.make_bwaidx.get(**wildcards).output[0]
     return expand(
         f"{dir_intermediate()}"
-        + "/fastmap/distances/{batch}/{genebatch}-{bucket}-distances.tsv",
+        + "/fastmap/distances/{batch}/{genebatch}/{genebatch}-{bucket}-distances.tsv",
         batch=wildcards.batch,
         genebatch=get_gene_batches(),
         bucket=glob_wildcards(os.path.join(checkpoint_output, "{bucket}.bwt")).bucket,
@@ -167,16 +167,16 @@ def fn_bwaidxbucket(_batch, _bucket):
 
 def fn_fastmapraw(_batch, _bucket, _genebatch):
     return (
-        f"{dir_intermediate()}/fastmap/raw/{_batch}/{_genebatch}-{_bucket}-raw.fastmap"
+        f"{dir_intermediate()}/fastmap/raw/{_batch}/{_genebatch}/{_genebatch}-{_bucket}-raw.fastmap"
     )
 
 
 def fn_fastmapprocess(_batch, _bucket, _genebatch):
-    return f"{dir_intermediate()}/fastmap/processed/{_batch}/{_genebatch}-{_bucket}-processed.fastmap"
+    return f"{dir_intermediate()}/fastmap/processed/{_batch}/{_genebatch}/{_genebatch}-{_bucket}-processed.fastmap"
 
 
 def fn_fastmapdists(_batch, _bucket, _genebatch):
-    return f"{dir_intermediate()}/fastmap/distances/{_batch}/{_genebatch}-{_bucket}-distances.tsv"
+    return f"{dir_intermediate()}/fastmap/distances/{_batch}/{_genebatch}/{_genebatch}-{_bucket}-distances.tsv"
 
 
 def fn_parsedists(_batch, _bucket, _genebatch):
