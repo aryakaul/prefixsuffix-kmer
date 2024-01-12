@@ -31,8 +31,6 @@ def _get_sample_from_fn(x):
     suffixes = ["fa", "fasta", "fna", "ffa"]
 
     b = os.path.basename(x)
-    # if b.endswith(".gz"):
-    #    b = b[:-3]
     sample, _, suffix = b.rpartition(".")
     assert suffix in suffixes, f"Unknown suffix of source files ({suffix} in {x})"
     return sample
@@ -92,8 +90,6 @@ def get_genome_batches():
 
 def get_samples():
     return SAMPLE_TO_BATCHES.keys()
-    # print(BATCHES_FN[_batch])
-    # return [i for i in BATCHES_FN[_batch]]
 
 
 def get_batch(_sample):
@@ -151,10 +147,19 @@ def aggregate_filter_distdirs(wildcards):
 def aggregate_passing_genes(wildcards):
     checkpoint_output = checkpoints.cluster_dists.get(**wildcards).output[0]
     return expand(
-        f"{dir_output()}" + "/passing_genes/{batch}/{genebatch}",
-        batch=get_genome_batches(),
-        genebatch=get_gene_batches(),
+        f"{checkpoint_output}" + "/{passing_genes}_clusters.csv",
+        passing_genes=glob_wildcards(
+            os.path.join(checkpoint_output, "{passing_genes}_clusters.csv")
+        ).passing_genes,
     )
+
+def get_passing_genes():
+    x = []
+    #with open(passing_file, 'r') as f:
+        #init_list = f.read().split()
+    init_list = aggregate_passing_genes()
+    for i in init_list: x.append(os.path.basename(i).split('_clusters.csv')[0])
+    return x
 
 
 def fn_prefsuffkmer(_genebatch):
@@ -166,9 +171,7 @@ def fn_bwaidxbucket(_batch, _bucket):
 
 
 def fn_fastmapraw(_batch, _bucket, _genebatch):
-    return (
-        f"{dir_intermediate()}/fastmap/raw/{_batch}/{_genebatch}/{_genebatch}-{_bucket}-raw.fastmap"
-    )
+    return f"{dir_intermediate()}/fastmap/raw/{_batch}/{_genebatch}/{_genebatch}-{_bucket}-raw.fastmap"
 
 
 def fn_fastmapprocess(_batch, _bucket, _genebatch):
@@ -181,6 +184,7 @@ def fn_fastmapdists(_batch, _bucket, _genebatch):
 
 def fn_parsedists(_batch, _bucket, _genebatch):
     return f"{dir_intermediate()}/kmerdists/{_batch}/{_genebatch}/{_bucket}-filterdists.csv"
+
 
 
 def fn_prefsuffkmer(_genebatch):
