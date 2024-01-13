@@ -33,11 +33,4 @@ rule all:
             f"{dir_output()}" + "/passing_genes-{batch}-{genebatch}.txt",
             batch=get_genome_batches(),
             genebatch=get_gene_batches(),
-        )
-        #fn_listoutputteddfs(
-            #expand(
-                #f"{dir_output()}" + "/passing_genes-{batch}-{genebatch}.txt",
-                #batch=get_genome_batches(),
-                #genebatch=get_gene_batches(),
-            #)
-        #),
+        ),
