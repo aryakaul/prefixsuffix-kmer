@@ -8,12 +8,17 @@ import os
 import subprocess
 import concurrent.futures
 
+
 def read_csv(input_csv):
     return pd.read_csv(input_csv)
 
+
 def sample_clusters(df, samples):
-    sampled_df = df.loc[df['Cluster']!=-1].groupby(['GeneID', 'Cluster']).sample(n=samples, random_state=0)
+    sampled_df = df.loc[df['Cluster'] != -1].groupby(['GeneID', 'Cluster'
+                                                      ]).sample(n=samples,
+                                                                random_state=0)
     return sampled_df
+
 
 def python_grep(file_path, search_string):
     count = 0
@@ -24,26 +29,32 @@ def python_grep(file_path, search_string):
                 hits.append(line.rstrip())
                 count += 1
     if count > 1:
-        logger.warning(f"Multiple results found for {search_string} in {file_path}...")
+        logger.warning(
+            f"Multiple results found for {search_string} in {file_path}...")
         logger.warning(f"Hits: {hits}")
     return hits[0]
+
 
 def extract_specific_file(tar_path, file_name, extract_to):
     """
     Extracts a specific file from a tar.xz archive using the tar command.
     """
 
-    target_path = os.path.join(os.path.basename(tar_path).split('.tar.xz')[0], file_name)
+    target_path = os.path.join(
+        os.path.basename(tar_path).split('.tar.xz')[0], file_name)
 
-    batch_outdir=os.path.join(extract_to, os.path.basename(tar_path).split('.tar.xz')[0])
+    batch_outdir = os.path.join(extract_to,
+                                os.path.basename(tar_path).split('.tar.xz')[0])
     full_extract_path = os.path.join(batch_outdir, file_name)
     if os.path.exists(full_extract_path):
-        logger.debug(f"File {file_name} already exists in {batch_outdir}, skipping!")
+        logger.debug(
+            f"File {file_name} already exists in {batch_outdir}, skipping!")
         return
 
     try:
         # Construct the tar command
-        logger.debug(f"Extracting {file_name} from {tar_path} to {batch_outdir}")
+        logger.debug(
+            f"Extracting {file_name} from {tar_path} to {batch_outdir}")
         os.makedirs(batch_outdir, exist_ok=True)
         cmd = ['tar', '-xf', tar_path, '-C', batch_outdir, target_path]
 
@@ -54,14 +65,16 @@ def extract_specific_file(tar_path, file_name, extract_to):
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed to extract {file_name} from {tar_path}: {e}")
 
+
 def process_row(args):
     """
     Function to process each row of the DataFrame.
     """
     row, extraction_directory = args
     tar_path = row.TarPath
-    genome_id = row.GenomeID+'.fa'
+    genome_id = row.GenomeID + '.fa'
     extract_specific_file(tar_path, genome_id, extraction_directory)
+
 
 def extract_all_files(df, ext_dir):
     with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -69,6 +82,7 @@ def extract_all_files(df, ext_dir):
         results = executor.map(process_row, args)
         for result in results:
             pass
+
 
 def main():
     parser = argparse.ArgumentParser(description="Gene clustering script.")
@@ -105,7 +119,8 @@ def main():
         "--output",
         type=str,
         required=True,
-        help="Path to the output downsampled dataframe that contains the paths to the extracted cluster reps."
+        help=
+        "Path to the output downsampled dataframe that contains the paths to the extracted cluster reps."
     )
     parser.add_argument(
         "-v",
@@ -130,14 +145,19 @@ def main():
     logger.info("Reading input cluster csv")
     df = read_csv(args.input_csv)
     downsampled_df = sample_clusters(df, args.samples)
-    downsampled_df['TarPath'] = downsampled_df['Bucket'].apply(lambda x: python_grep(args.inputfile, x+'.tar.xz'))
+    downsampled_df['TarPath'] = downsampled_df['Bucket'].apply(
+        lambda x: python_grep(args.inputfile, x + '.tar.xz'))
     logger.info("Added paths to all tar files")
     os.makedirs(args.extraction_dir, exist_ok=True)
     extract_all_files(downsampled_df, args.extraction_dir)
     # downsampled_df['FastaPath'] = os.path.join(args.extraction_dir, downsampled_df['Bucket'], downsampled_df['GenomeID']+".fa")
-    downsampled_df['FastaPath'] = downsampled_df.apply(lambda row: os.path.join(args.extraction_dir, row['Bucket'], row['GenomeID'] + ".fa"), axis=1)
+    downsampled_df['FastaPath'] = downsampled_df.apply(
+        lambda row: os.path.join(args.extraction_dir, row['Bucket'], row[
+            'GenomeID'] + ".fa"),
+        axis=1)
     downsampled_df.to_csv(args.output)
     logger.success("Extracted all files successfully")
+
 
 if __name__ == "__main__":
     main()
