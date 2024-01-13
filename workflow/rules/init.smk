@@ -145,9 +145,9 @@ def aggregate_filter_distdirs(wildcards):
 
 
 def aggregate_passing_genes(wildcards):
-#def aggregate_passing_genes():
+    # def aggregate_passing_genes():
     checkpoint_output = checkpoints.cluster_dists.get(**wildcards).output[0]
-    #checkpoint_output = checkpoints.cluster_dists.get().output[0]
+    # checkpoint_output = checkpoints.cluster_dists.get().output[0]
     return expand(
         f"{checkpoint_output}" + "/{passing_genes}_clusters.csv",
         passing_genes=glob_wildcards(
@@ -179,9 +179,11 @@ def fn_fastmapdists(_batch, _bucket, _genebatch):
 def fn_parsedists(_batch, _bucket, _genebatch):
     return f"{dir_intermediate()}/kmerdists/{_batch}/{_genebatch}/{_bucket}-filterdists.csv"
 
+
 def fn_downsampled_df(_batch, _genebatch, _passinggene):
-    passing_gene = os.path.basename(_passinggene).split('_clusters.csv')[0]
+    passing_gene = os.path.basename(_passinggene).split("_clusters.csv")[0]
     return f"{dir_intermediate()}/decompressed_genomes/{_batch}/{_genebatch}/{passing_gene}-downsampled.csv"
+
 
 def fn_listoutputteddfs(passing_file_list):
     y = []
@@ -189,18 +191,18 @@ def fn_listoutputteddfs(passing_file_list):
         genes = []
         batch = []
         genebatch = []
-        with open(passing_file, 'r') as f:
+        with open(passing_file, "r") as f:
             init_list = f.read().split()
-            for i in init_list: 
-                parts = i.split('/')
+            for i in init_list:
+                parts = i.split("/")
                 genes.append(parts[-2])
                 genebatch.append(parts[-4])
                 batch.append(parts[-5])
         for i in range(len(genes)):
-            y.append(f"{dir_intermediate()}/decompressed_genomes/{batch[i]}/{genebatch[i]}/{genes[i]}-downsampled.csv")
+            y.append(
+                f"{dir_intermediate()}/decompressed_genomes/{batch[i]}/{genebatch[i]}/{genes[i]}-downsampled.csv"
+            )
     return y
-
-    
 
 
 def fn_prefsuffkmer(_genebatch):
