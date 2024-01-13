@@ -31,8 +31,6 @@ def _get_sample_from_fn(x):
     suffixes = ["fa", "fasta", "fna", "ffa"]
 
     b = os.path.basename(x)
-    # if b.endswith(".gz"):
-    #    b = b[:-3]
     sample, _, suffix = b.rpartition(".")
     assert suffix in suffixes, f"Unknown suffix of source files ({suffix} in {x})"
     return sample
@@ -92,8 +90,6 @@ def get_genome_batches():
 
 def get_samples():
     return SAMPLE_TO_BATCHES.keys()
-    # print(BATCHES_FN[_batch])
-    # return [i for i in BATCHES_FN[_batch]]
 
 
 def get_batch(_sample):
@@ -121,7 +117,7 @@ def aggregate_fastmap_dists(wildcards):
     checkpoint_output = checkpoints.make_bwaidx.get(**wildcards).output[0]
     return expand(
         f"{dir_intermediate()}"
-        + "/fastmap/distances/{batch}/{genebatch}-{bucket}-distances.tsv",
+        + "/fastmap/distances/{batch}/{genebatch}/{genebatch}-{bucket}-distances.tsv",
         batch=wildcards.batch,
         genebatch=get_gene_batches(),
         bucket=glob_wildcards(os.path.join(checkpoint_output, "{bucket}.bwt")).bucket,
@@ -150,11 +146,36 @@ def aggregate_filter_distdirs(wildcards):
 
 def aggregate_passing_genes(wildcards):
     checkpoint_output = checkpoints.cluster_dists.get(**wildcards).output[0]
-    return expand(
-        f"{dir_output()}" + "/passing_genes/{batch}/{genebatch}",
-        batch=get_genome_batches(),
-        genebatch=get_gene_batches(),
+    # expand(
+    # f"{dir_output()}" + "/passing_genes-{batch}-{genebatch}.txt",
+    # batch=get_genome_batches(),
+    # genebatch=get_gene_batches(),
+    # )
+    # print(checkpoint_output)
+    x = expand(
+        f"{checkpoint_output}" + "/{passing_genes}_clusters.csv",
+        passing_genes=glob_wildcards(
+            os.path.join(checkpoint_output, "{passing_genes}_clusters.csv")
+        ).passing_genes,
     )
+    # print(x)
+    return fn_listoutputteddfs(x)
+    # fn_listoutputteddfs(
+    # expand(
+    # f"{dir_output()}" + "/passing_genes-{batch}-{genebatch}.txt",
+    # batch=get_genome_batches(),
+    # genebatch=get_gene_batches(),
+    # )
+    # ),
+    # return expand(
+    # f"{dir_output()}"
+    # + "/{batch}/{genebatch}/passing_genes/{passing_gene}/{passing_genes}_clusters.csv",
+    # batch=wildcards.batch,
+    # genebatch=wildcards.genebatch,
+    # passing_genes=glob_wildcards(
+    # os.path.join(checkpoint_output, "{passing_genes}_clusters.csv")
+    # ).passing_genes,
+    # )
 
 
 def fn_prefsuffkmer(_genebatch):
@@ -166,21 +187,56 @@ def fn_bwaidxbucket(_batch, _bucket):
 
 
 def fn_fastmapraw(_batch, _bucket, _genebatch):
-    return (
-        f"{dir_intermediate()}/fastmap/raw/{_batch}/{_genebatch}-{_bucket}-raw.fastmap"
-    )
+    return f"{dir_intermediate()}/fastmap/raw/{_batch}/{_genebatch}/{_genebatch}-{_bucket}-raw.fastmap"
 
 
 def fn_fastmapprocess(_batch, _bucket, _genebatch):
-    return f"{dir_intermediate()}/fastmap/processed/{_batch}/{_genebatch}-{_bucket}-processed.fastmap"
+    return f"{dir_intermediate()}/fastmap/processed/{_batch}/{_genebatch}/{_genebatch}-{_bucket}-processed.fastmap"
 
 
 def fn_fastmapdists(_batch, _bucket, _genebatch):
-    return f"{dir_intermediate()}/fastmap/distances/{_batch}/{_genebatch}-{_bucket}-distances.tsv"
+    return f"{dir_intermediate()}/fastmap/distances/{_batch}/{_genebatch}/{_genebatch}-{_bucket}-distances.tsv"
 
 
 def fn_parsedists(_batch, _bucket, _genebatch):
     return f"{dir_intermediate()}/kmerdists/{_batch}/{_genebatch}/{_bucket}-filterdists.csv"
+
+
+def fn_downsampled_df(_batch, _genebatch, _passinggene):
+    # checkpoint_output = checkpoints.cluster_dists.get().output[0]
+    passing_gene = os.path.basename(_passinggene).split("_clusters.csv")[0]
+    return f"{dir_intermediate()}/decompressed_genomes/{_batch}/{_genebatch}/{passing_gene}-downsampled.csv"
+
+
+def fn_listoutputteddfs(passing_file_list):
+    y = []
+    # output/test/test_genes/passing_genes/PECAMD_03475-len921/PECAMD_03475-len921_clusters.csv
+    for passing_gene in passing_file_list:
+        parts = passing_gene.split("/")
+        gene = parts[-2]
+        batch = parts[-5]
+        genebatch = parts[-4]
+        y.append(
+            f"{dir_intermediate()}/decompressed_genomes/{batch}/{genebatch}/{gene}-downsampled.csv"
+        )
+    return y
+    # for passing_file in passing_file_list:
+    # genes = []
+    # batch = []
+    # genebatch = []
+    # with open(passing_file, "r") as f:
+    # init_list = f.read().split()
+    # print(init_list)
+    # for i in init_list:
+    # parts = i.split("/")
+    # genes.append(parts[-2])
+    # genebatch.append(parts[-4])
+    # batch.append(parts[-5])
+    # for i in range(len(genes)):
+    # y.append(
+    # f"{dir_intermediate()}/decompressed_genomes/{batch[i]}/{genebatch[i]}/{genes[i]}-downsampled.csv"
+    # )
+    # return y
 
 
 def fn_prefsuffkmer(_genebatch):

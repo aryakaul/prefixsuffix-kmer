@@ -18,6 +18,7 @@ include: "rules/bwa.smk"
 include: "rules/kmercreation.smk"
 include: "rules/fastmap_processing.smk"
 include: "rules/clusterdists.smk"
+include: "rules/genome_decompression.smk"
 
 
 ## WILDCARDS CONSTRAINS
@@ -28,10 +29,6 @@ wildcard_constraints:
 
 rule all:
     input:
-        #expand(fn_prefsuffkmer(_genebatch="{genebatch}"), genebatch=get_gene_batches()),
-        #expand(
-        #f"{dir_output()}" + "/{batch}-filterdists.txt", batch=get_genome_batches()
-        #),
         expand(
             f"{dir_output()}" + "/passing_genes-{batch}-{genebatch}.txt",
             batch=get_genome_batches(),
