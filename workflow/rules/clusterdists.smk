@@ -1,6 +1,6 @@
 checkpoint cluster_dists:
     output:
-        directory(f"{dir_output()}" + "/passing_genes/{batch}/{genebatch}"),
+        directory(f"{dir_output()}" + "/{batch}/{genebatch}"),
     input:
         filterdists=aggregate_filter_dists,
     conda:
@@ -9,7 +9,6 @@ checkpoint cluster_dists:
         epsilon=config["max_distance"],
         min_samples=config["min_samples"],
         intermediate=config["intermediate_dir"],
-        #script=workflow.source_path("../scripts/cluster_dists"),
         script=Path(workflow.basedir) / "scripts/cluster_dists",
     shell:
         """
@@ -24,10 +23,10 @@ checkpoint cluster_dists:
 
 
 rule aggregate_2:
-    input:
-        aggregate_passing_genes,
     output:
         f"{dir_output()}" + "/passing_genes-{batch}-{genebatch}.txt",
+    input:
+        aggregate_passing_genes,
     shell:
         """
         echo {input} > {output}
