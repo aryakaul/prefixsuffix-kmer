@@ -10,13 +10,13 @@ rule passinggene_cluster_decompression:
     params:
         script=Path(workflow.basedir) / "scripts/genome_decompression",
         sample_size=config['cluster_sample_size'],
+        outdir=f"{dir_intermediate()}/decompressed_genomes/genomes" 
     shell:
         """
-        OUTDIR=$(dirname {output})/genomes
         {params.script} \\
             -i {input.passing_gene_csv} \\
             -f {input.fof} \\
-            -e $OUTDIR \\
+            -e {params.outdir} \\
             -o {output.clustersampled_csv} \\
             -s {params.sample_size} \\
             -vvv 
