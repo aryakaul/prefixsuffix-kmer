@@ -9,8 +9,8 @@ rule passinggene_cluster_decompression:
         "../envs/pandas.yml"
     params:
         script=Path(workflow.basedir) / "scripts/genome_decompression",
-        sample_size=config['cluster_sample_size'],
-        outdir=f"{dir_intermediate()}/decompressed_genomes/genomes" 
+        sample_size=config["cluster_sample_size"],
+        outdir=f"{dir_intermediate()}/decompressed_genomes/genomes",
     shell:
         """
         {params.script} \\
