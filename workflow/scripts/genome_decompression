@@ -56,7 +56,7 @@ def extract_specific_file(tar_path, file_name, extract_to):
         logger.debug(
             f"Extracting {file_name} from {tar_path} to {batch_outdir}")
         os.makedirs(batch_outdir, exist_ok=True)
-        cmd = ['tar', '-xf', tar_path, '-C', batch_outdir, target_path]
+        cmd = ['tar', '-xf', tar_path, '-C', extract_to, target_path]
 
         # Execute the command
         subprocess.run(cmd, check=True)
