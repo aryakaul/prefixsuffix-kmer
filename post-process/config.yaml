@@ -1,0 +1,25 @@
+########################
+# SNAKEMAKE PARAMETERS #
+########################
+
+# (1) Directories for individual stages of the workflow
+input_dir:            input
+previnput_dir:        ../input
+intermediate_dir:     intermediate
+previntermediate_dir: ../intermediate
+output_dir:           output
+prevoutput_dir:       ../output
+conda_dir:            .conda
+
+# (2) Parameters for Snakemake execution
+use_conda:            True # build conda environments automatically by Snakemake
+
+bakta_db:             /n/data1/hms/dbmi/baym/databases/bakta_dbv5/db
+
+##############
+# PARAMETERS #
+##############
+
+# (1) General parameters; notes:
+#     - cluster sample size is
+cluster_sample_size:    4
