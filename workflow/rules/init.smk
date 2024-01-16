@@ -186,7 +186,6 @@ def fn_downsampled_df(_batch, _genebatch, _passinggene):
     return f"{dir_intermediate()}/downsampled/{_batch}/{_genebatch}/passing_genes/{passing_gene}-downsampled.csv"
 
 
-
 def fn_listoutputteddfs(passing_file_list):
     y = []
     for passing_gene in passing_file_list:
@@ -194,7 +193,9 @@ def fn_listoutputteddfs(passing_file_list):
         gene = parts[-2]
         batch = parts[-5]
         genebatch = parts[-4]
-        y.append(fn_downsampled_df(_batch=batch, _genebatch=genebatch, _passinggene=gene))
+        y.append(
+            fn_downsampled_df(_batch=batch, _genebatch=genebatch, _passinggene=gene)
+        )
     return y
 
 
