@@ -86,7 +86,9 @@ def process_row(args):
 
 def extract_all_files(df, ext_dir):
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        args = ((row, ext_dir) for row in df.drop_duplicates('TarPath').itertuples(index=False))
+        args = ((row, ext_dir)
+                for row in df.drop_duplicates('TarPath').itertuples(
+                    index=False))
         results = executor.map(process_row, args)
         for result in results:
             pass
