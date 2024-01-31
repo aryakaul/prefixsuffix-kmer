@@ -38,6 +38,23 @@ def aggregate_results(folder_path):
 # Function to process a single gene
 def process_gene(gene, gene_data, epsilon, min_samples, output_dir):
     logger.debug(f"Processing gene: {gene}")
+    gene_name = gene
+    if '/' in gene_name:
+        logger.warning(f"{gene_name} contains '/', replacing '/' with ':'")
+        gene_name = gene_name.replace('/',':')
+        logger.warning(f"{gene_name} replaces {gene}")
+    if '|' in gene_name:
+        logger.warning(f"{gene_name} contains '|', replacing '|' with ':'")
+        gene_name = gene_name.replace('|',':')
+        logger.warning(f"{gene_name} replaces {gene}")
+    if '(' in gene_name:
+        logger.warning(f"{gene_name} contains '(', replacing '(' with '\\('")
+        gene_name = gene_name.replace('(','\\(')
+        logger.warning(f"{gene_name} replaces {gene}")
+    if ')' in gene_name:
+        logger.warning(f"{gene_name} contains ')', replacing ')' with '\\)'")
+        gene_name = gene_name.replace(')','\\)')
+        logger.warning(f"{gene_name} replaces {gene}")
 
     # Count the occurrences of each unique value for sample_weight
     value_counts = gene_data["Difference"].value_counts()
@@ -48,14 +65,13 @@ def process_gene(gene, gene_data, epsilon, min_samples, output_dir):
     # Reshape for DBSCAN
     differences = gene_data_unique["Difference"].values.reshape(-1, 1)
 
-    # Your existing plotting code
     create_violin_plot(
-        gene_data, gene,
+        gene_data, gene_name,
         os.path.join(output_dir, "all_differencedist_plots",
-                     f"{gene}_scatterplot.png"))
+                     f"{gene_name}_dist.png"))
 
     logger.debug(f"Clustering differences")
-    dbscan = DBSCAN(eps=epsilon, min_samples=min_samples, n_jobs=1)
+    dbscan = DBSCAN(eps=epsilon, min_samples=min_samples, n_jobs=-1)
 
     logger.debug(f"Fitting labels")
 
@@ -68,14 +84,14 @@ def process_gene(gene, gene_data, epsilon, min_samples, output_dir):
     # Check if the gene meets the criteria
     label_set = set(labels)
     if (-1 in label_set and len(label_set) <= 2) or len(label_set) < 2:
-        return gene, None, False
+        return gene, None, False, None
 
     logger.info(
         f"{gene} passed filter with the following clusters: {label_set}")
 
     # Create a mapping from unique values to labels
     mapping = dict(zip(gene_data_unique["Difference"], labels))
-    return gene, mapping, True
+    return gene, mapping, True, gene_name
 
 
 # Function to perform clustering and save results
@@ -89,19 +105,23 @@ def cluster_gene_differences_threaded(df, epsilon, min_samples, output_dir):
                                     min_samples, output_dir)] = gene
 
         for future in concurrent.futures.as_completed(futures):
-            gene, mapping, is_worthy = future.result()
+            gene, mapping, is_worthy, gene_name = future.result()
 
             if is_worthy:
                 gene_df = df[df["GeneID"] == gene].copy()
                 gene_df["Cluster"] = gene_df['Difference'].map(mapping)
-                outdir = os.path.join(output_dir, "passing_genes", gene)
+                outdir = os.path.join(output_dir, "passing_genes", gene_name)
                 os.makedirs(outdir, exist_ok=True)
 
                 # Plotting and saving
                 create_violin_plot_ofclusters(
-                    gene_df, gene,
-                    os.path.join(outdir, f"{gene}_scatterplot.png"))
-                gene_df.to_csv(os.path.join(outdir, f"{gene}_clusters.csv"),
+                    gene_df, gene_name,
+                    os.path.join(outdir, f"{gene_name}_coloreddist.png"))
+                create_kde_plot(
+                    gene_df, gene_name,
+                    os.path.join(outdir, f"{gene_name}_kde.png")
+                )
+                gene_df.to_csv(os.path.join(outdir, f"{gene_name}_clusters.csv"),
                                index=False)
 
 
@@ -109,27 +129,58 @@ def cluster_gene_differences_threaded(df, epsilon, min_samples, output_dir):
 def create_violin_plot(gene_df, gene_id, output_file):
     plt.figure(figsize=(10, 6))
 
+    ax = sns.stripplot(
+        x='Difference',
+        data=gene_df,
+        jitter=0.35,
+        color='grey',
+        orient="h",
+        alpha=0.8
+    )
+
+    sns.violinplot(
+        x='Difference',
+        data=gene_df,
+        fill=False,
+        inner=None,
+        cut=0,
+        color='black',
+        split=False,
+        bw_method=0.02,
+    )
+    plt.ylabel("Density")
+    plt.xlabel("Distance Difference compared to gene (bp)")
+    plt.title(f"Gene: {gene_id}")
+    sns.despine(left=True)
+    plt.savefig(output_file, dpi=200)
+    plt.close()
+
+def fulldist_colorclusters(gene_df, gene_id, output_file):
+    plt.figure(figsize=(10, 6))
+
     ax = sns.violinplot(x="Difference",
                         data=gene_df,
                         fill=False,
-                        color="black")
+                        color="black",
+                        bw_method=0.02,
+                        inner=None)
     for artist in ax.lines:
         artist.set_zorder(10)
     for artist in ax.findobj(PathCollection):
         artist.set_zorder(11)
 
     sns.stripplot(x="Difference",
+                  hue='Cluster',
                   data=gene_df,
-                  jitter=True,
+                  jitter=0.35,
                   ax=ax,
                   orient="h",
                   alpha=0.8,
-                  color="grey",
                   zorder=1)
-    plt.title(f"Difference Distribution (bp) for Gene: {gene_id}")
-    plt.xlabel("")
+    plt.title(f"Gene: {gene_id}")
+    plt.xlabel("Difference (bp)")
     sns.despine()
-    plt.savefig(output_file, dpi=200)
+    plt.savefig(output_file, dpi=200, bbox_inches='tight')
     plt.close()
 
 
@@ -138,32 +189,39 @@ def create_violin_plot_ofclusters(gene_df, gene_id, output_file):
     plt.figure(figsize=(10, 6))
 
     ax = sns.violinplot(
-        x="Cluster",
-        y="Difference",
-        data=gene_df.loc[gene_df['Cluster'] != -1],
+        x='Difference',
+        data=gene_df,
         fill=False,
-        color="black",
+        inner=None,
+        cut=0,
+        color='black',
+        split=False,
+        bw_method=0.02,
     )
-    for artist in ax.lines:
-        artist.set_zorder(10)
-    for artist in ax.findobj(PathCollection):
-        artist.set_zorder(11)
 
-    sns.stripplot(x="Cluster",
-                  y="Difference",
-                  data=gene_df.loc[gene_df['Cluster'] != -1],
-                  jitter=True,
-                  ax=ax,
-                  alpha=0.8,
-                  color="grey",
-                  zorder=1)
-    plt.title(f"Cluster Difference Distribution (bp) for Gene: {gene_id}")
-    plt.xlabel("Cluster Assignment")
-    plt.ylabel("Difference (bp)")
-    sns.despine()
-    plt.savefig(output_file, dpi=200)
+    sns.stripplot(
+        x='Difference',
+        hue='Cluster',
+        data=gene_df,
+        jitter=0.35,
+        orient="h",
+        ax=ax
+    )
+
+    plt.ylabel("Density")
+    plt.xlabel("Distance Difference compared to gene (bp)")
+    plt.title(f"Gene: {gene_id}")
+    sns.despine(left=True)
+    plt.savefig(output_file, dpi=200, bbox_inches='tight')
     plt.close()
 
+def create_kdeplot(gene_df, gene_id, output_file):
+    ax = sns.kdeplot(data=gene_df, x="Difference", color='black')
+    sns.despine()
+    plt.ylabel("Density")
+    plt.xlabel("Distance Difference compared to gene (bp)")
+    plt.title(f"Gene: {gene_id}")
+    plt.savefig(output_file, dpi=200, bbox_inches='tight')
 
 def main():
     parser = argparse.ArgumentParser(description="Gene clustering script.")
