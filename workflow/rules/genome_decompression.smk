@@ -14,11 +14,11 @@ rule passinggene_cluster_decompression:
     shell:
         """
         {params.script} \\
-            -i {input.passing_gene_csv} \\
+            -i "{input.passing_gene_csv}" \\
             -f {input.fof} \\
             -e {params.outdir} \\
             -o {output.clustersampled_csv} \\
             -s {params.sample_size} \\
             -vvv 
-        cp {output.clustersampled_csv} {params.outdir}/../../{wildcards.batch}/{wildcards.genebatch}/passing_genes/{wildcards.passing_gene}
+        #cp "{output.clustersampled_csv}" "{params.outdir}/../../{wildcards.batch}/{wildcards.genebatch}/passing_genes/"{wildcards.passing_gene}""
         """
