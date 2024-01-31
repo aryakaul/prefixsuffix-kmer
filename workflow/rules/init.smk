@@ -154,7 +154,8 @@ def aggregate_passing_genes(wildcards):
             os.path.join(checkpoint_output, "{passing_genes}_clusters.csv")
         ).passing_genes,
     )
-    return fn_listoutputteddfs(x)
+    return x
+    #return fn_listoutputteddfs(x)
 
 
 def fn_prefsuffkmer(_genebatch):
