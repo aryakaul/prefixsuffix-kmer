@@ -155,7 +155,7 @@ def aggregate_passing_genes(wildcards):
         ).passing_genes,
     )
     return x
-    #return fn_listoutputteddfs(x)
+    # return fn_listoutputteddfs(x)
 
 
 def fn_prefsuffkmer(_genebatch):
