@@ -8,11 +8,6 @@ import sys
 
 configfile: "config.yaml"
 
-
-def dir_input():
-    return Path(config["input_dir"])
-
-
 def dir_intermediate():
     return Path(config["intermediate_dir"])
 
@@ -56,18 +51,6 @@ def get_passinggenes_batches():
 
 def get_passinggenes_genebatches():
     return PG_GENEBATCH
-
-
-def get_full_genomes():
-    return DECOMP_FULL_GENOMES
-
-
-def get_genomes():
-    return GENOMES
-
-
-def get_batches():
-    return BATCHES
 
 
 def fn_bakta_gff(_batch, _genome):
@@ -161,3 +144,17 @@ def chkpntaggregate_genomefastas(wildcards):
 def chkpntaggregate_genomefasta_dir(wildcards):
     checkpoint_output = checkpoints.genome_decompression.get(**wildcards).output[0]
     return checkpoint_output
+
+def fn_decompressedgenomes(_batch, _genebatch):
+    return (f"{dir_intermediate()}/genomes-{_batch}-{_genebatch}.txt",)
+
+
+def chkpntaggregate_genomes(wildcards):
+    checkpoint_output = checkpoints.passinggene_cluster_decompression.get(
+        **wildcards
+    ).output[0]
+    x = expand(
+        f"{checkpoint_output}" + "/{genomes}.fa",
+        genomes=glob_wildcards(os.path.join(checkpoint_output, "{genomes}.fa")).genomes,
+    )
+    return x

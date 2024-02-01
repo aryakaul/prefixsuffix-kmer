@@ -96,7 +96,6 @@ def process_gene(gene, gene_data, epsilon, min_samples, output_dir):
     if "'" in gene_name:
         logger.warning(f"{gene_name} contains \"'\", deleting \"'\"")
         gene_name = gene_name.replace("'", "")
-        logger.warning(f"{gene_name} replaces {gene}")
 
     # Count the occurrences of each unique value for sample_weight
     value_counts = gene_data["Difference"].value_counts()
@@ -153,7 +152,6 @@ def process_gene(gene, gene_data, epsilon, min_samples, output_dir):
     # Create a mapping from unique values to labels
     mapping = dict(zip(gene_data_unique["Difference"], new_labels))
 
-    # gene_df = df[df["GeneID"] == gene].copy()
     gene_df = gene_data.copy()
     gene_df["Cluster"] = gene_df['Difference'].map(mapping)
     outdir = os.path.join(output_dir, "passing_genes", gene_name)
@@ -190,20 +188,6 @@ def cluster_gene_differences_threaded(df, epsilon, min_samples, output_dir):
                 num_passing_genes += 1
             else:
                 num_failing_genes += 1
-                # gene_df = df[df["GeneID"] == gene].copy()
-                # gene_df["Cluster"] = gene_df['Difference'].map(mapping)
-                # outdir = os.path.join(output_dir, "passing_genes", gene_name)
-                # os.makedirs(outdir, exist_ok=True)
-
-                # create_violin_plot_ofclusters(
-                # gene_df, gene_name,
-                # os.path.join(outdir, f"{gene_name}_coloreddist.png"))
-                # create_kde_plot(
-                # gene_df, gene_name,
-                # os.path.join(outdir, f"{gene_name}_kde.png")
-                # )
-                # gene_df.to_csv(os.path.join(outdir, f"{gene_name}_clusters.csv"),
-                # index=False)
     return num_passing_genes, num_failing_genes
 
 
@@ -211,12 +195,14 @@ def cluster_gene_differences_threaded(df, epsilon, min_samples, output_dir):
 def create_violin_plot(gene_df, gene_id, output_file):
     plt.figure(figsize=(10, 6))
 
-    ax = sns.stripplot(x='Difference',
-                       data=gene_df,
-                       jitter=0.35,
-                       color='grey',
-                       orient="h",
-                       alpha=0.8)
+    ax = sns.stripplot(
+        x='Difference',
+        data=gene_df,
+        jitter=0.35,
+        color='grey',
+        orient="h",
+        alpha=0.8
+    )
 
     sns.violinplot(
         x='Difference',
@@ -234,7 +220,6 @@ def create_violin_plot(gene_df, gene_id, output_file):
     sns.despine(left=True)
     plt.savefig(output_file, dpi=200)
     plt.close()
-
 
 def fulldist_colorclusters(gene_df, gene_id, output_file):
     plt.figure(figsize=(10, 6))
@@ -259,7 +244,9 @@ def fulldist_colorclusters(gene_df, gene_id, output_file):
                   ax=ax,
                   orient="h",
                   alpha=0.8,
-                  zorder=1)
+                  zorder=1,
+                  palette = palette)
+
     plt.title(f"Gene: {gene_id}")
     plt.xlabel("Difference (bp)")
     sns.despine()
@@ -307,7 +294,6 @@ def create_kde_plot(gene_df, gene_id, output_file):
     plt.xlabel("Distance Difference compared to gene (bp)")
     plt.title(f"Gene: {gene_id}")
     plt.savefig(output_file, dpi=200, bbox_inches='tight')
-
 
 def main():
     parser = argparse.ArgumentParser(description="Gene clustering script.")

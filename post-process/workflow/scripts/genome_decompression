@@ -89,6 +89,89 @@ def process_bucket_group_wrapper(args):
     group, file_mapping, extraction_dir = args
     return process_bucket(group, file_mapping, extraction_dir)
 
+def read_csv(input_dir):
+    print(input_dir)
+    search = glob.glob(os.path.join(input_dir, "*/*_clusters.csv"))
+    print(search)
+    dataframes = []
+    for x in search:
+        df = pd.read_csv(x)
+        dataframes.append(df)
+    return pd.concat(dataframes, ignore_index=True)
+
+
+def sample_clusters(df, samples):
+    sampled_df = df.loc[df['Cluster'] != -1].groupby(['GeneID', 'Cluster'
+                                                      ]).sample(n=samples,
+                                                                random_state=0)
+    return sampled_df
+
+
+def python_grep(file_path, search_string):
+    count = 0
+    hits = []
+    with open(file_path, 'r') as file:
+        for line in file:
+            if search_string in line:
+                hits.append(line.rstrip())
+                count += 1
+    if count > 1:
+        logger.warning(
+            f"Multiple results found for {search_string} in {file_path}...")
+        logger.warning(f"Hits: {hits}")
+    return hits[0]
+
+
+def extract_specific_file(tar_path, file_name, extract_to):
+    """
+    Extracts a specific file from a tar.xz archive using the tar command.
+    """
+
+    target_path = os.path.join(
+        os.path.basename(tar_path).split('.tar.xz')[0], file_name)
+
+    batch_outdir = os.path.join(extract_to,
+                                os.path.basename(tar_path).split('.tar.xz')[0])
+    full_extract_path = os.path.join(batch_outdir, file_name)
+    if os.path.exists(full_extract_path):
+        logger.debug(
+            f"File {file_name} already exists in {batch_outdir}, skipping!")
+        return
+
+    try:
+        # Construct the tar command
+        logger.debug(
+            f"Extracting {file_name} from {tar_path} to {batch_outdir}")
+        os.makedirs(batch_outdir, exist_ok=True)
+        cmd = ['tar', '-xf', tar_path, '-C', extract_to, target_path]
+
+        # Execute the command
+        subprocess.run(cmd, check=True)
+        logger.info(f"Successfully extracted {file_name} from {tar_path}")
+
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Failed to extract {file_name} from {tar_path}: {e}")
+
+
+def process_row(args):
+    """
+    Function to process each row of the DataFrame.
+    """
+    row, extraction_directory = args
+    tar_path = row.TarPath
+    genome_id = row.GenomeID + '.fa'
+    extract_specific_file(tar_path, genome_id, extraction_directory)
+
+
+def extract_all_files(df, ext_dir):
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        args = ((row, ext_dir)
+                for row in df.drop_duplicates('TarPath').itertuples(
+                    index=False))
+        results = executor.map(process_row, args)
+        for result in results:
+            pass
+
 
 def main():
     parser = argparse.ArgumentParser(description="Gene clustering script.")
