@@ -15,19 +15,31 @@ report: "report/workflow.rst"
 
 include: "rules/init.smk"
 include: "rules/bakta.smk"
-
-
-## WILDCARDS CONSTRAINS
-wildcard_constraints:
-    sample=r"[a-zA-Z0-9_-]+",
-    batch=r"[a-zA-Z0-9_-]+",
+include: "rules/region_decompression.smk"
+include: "rules/genome_decompression.smk"
+include: "rules/tree.smk"
 
 
 rule all:
     input:
+        #expand(
+        #fn_decompregion_agg("{batch}", "{genebatch}", "{passinggene}"),
+        #zip,
+        #batch=get_passinggenes_batches(),
+        #genebatch=get_passinggenes_genebatches(),
+        #passinggene=get_passinggenes(),
+        #),
         expand(
-            fn_bakta_gff("{batch}", "{genome}"),
+            fn_downsample_nwk("{batch}", "{genebatch}", "{passinggene}"),
             zip,
-            batch=get_batches(),
-            genome=get_genomes(),
+            batch=get_passinggenes_batches(),
+            genebatch=get_passinggenes_genebatches(),
+            passinggene=get_passinggenes(),
+        ),
+        expand(
+            fn_newtree("{batch}", "{genebatch}", "{passinggene}"),
+            zip,
+            batch=get_passinggenes_batches(),
+            genebatch=get_passinggenes_genebatches(),
+            passinggene=get_passinggenes(),
         ),
