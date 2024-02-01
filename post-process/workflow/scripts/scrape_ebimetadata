@@ -1,0 +1,119 @@
+#!/usr/bin/env python
+
+import argparse
+import os
+import pandas as pd
+import subprocess
+import sys
+from loguru import logger
+import multiprocessing
+import requests
+
+
+# Function to fetch and parse data for a single GenomeID
+def fetch_and_parse(genome_id):
+    url = f"https://www.ebi.ac.uk/biosamples/samples/{genome_id}"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # raise exception for HTTP errors
+        data = response.json()['characteristics']
+        # data = response.json()
+        # print(data)
+        # sys.exit(2)
+        # Return a tuple of GenomeID and the data
+        logger.debug(f"Found data for {genome_id}")
+        return genome_id, data
+    except requests.RequestException as e:
+        logger.error(f"Error fetching data for {genome_id}: {e}")
+        return genome_id, None
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description=
+        "Extract FASTA sequences from tar archives based on CSV input")
+    parser.add_argument("-i",
+                        "--inputcsv",
+                        required=True,
+                        type=str,
+                        help="Path to the Cluster CSV file")
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        required=True,
+        help="Output csv to dump data to",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help=
+        "Increase verbosity level. Can be specified multiple times for more detailed logs.",
+    )
+
+    args = parser.parse_args()
+
+    if args.verbose == 0:
+        logger.remove()
+    elif args.verbose == 1:
+        logger.remove()
+        logger.add(sys.stderr, level="INFO")
+    elif args.verbose >= 2:
+        logger.remove()
+        logger.add(sys.stderr, level="DEBUG")
+
+    logger.info(f"Reading in {args.inputcsv}")
+    df = pd.read_csv(args.inputcsv)
+    with multiprocessing.Pool() as pool:
+        results = pool.map(fetch_and_parse, df['GenomeID'])
+    logger.info(f"Fetched metadata for all genomes")
+    new_data = []
+
+    # Iterate over results and prepare data for new DataFrame
+    for genome_id, data in results:
+        if data:
+            # row_data = {}
+            row_data = {'GenomeID': genome_id}
+            for key, value in data.items():
+                if 'text' in value[0]:
+                    row_data[key] = value[0]['text']
+                else:
+                    row_data[
+                        key] = value  # Keep the original value, could be None
+            new_data.append(row_data)
+
+    # Convert the list of dictionaries to a DataFrame
+    temp_df = pd.DataFrame(new_data)
+
+    # Define the percentage threshold (X%)
+    threshold_percentage = 75
+
+    # Calculate the number of required non-None values based on the threshold
+    required_non_none_count = len(temp_df) * threshold_percentage / 100
+
+    # Filter columns where the number of non-None values meets or exceeds the threshold
+    columns_to_keep = [
+        col for col in temp_df.columns
+        if temp_df[col].notna().sum() >= required_non_none_count
+    ]
+
+    # Include 'GenomeID' in the columns to keep
+    # columns_to_keep.append('GenomeID')
+
+    # Select only the columns to keep
+    filtered_df = temp_df[columns_to_keep]
+
+    print(filtered_df)
+
+    # Merge the filtered DataFrame with the original one
+    # Assuming 'GenomeID' is a unique identifier
+    df = pd.merge(df, filtered_df, on='GenomeID', how='left')
+
+    logger.info(f"Writing to {args.output}")
+    df.to_csv(args.output)
+
+
+if __name__ == "__main__":
+    main()
