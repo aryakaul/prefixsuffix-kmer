@@ -8,11 +8,12 @@ from loguru import logger
 import os
 import seaborn as sns
 from ete3 import Tree
-
 """
 Code copied from Prophyle:
     https://github.com/prophyle/prophyle/blob/50419f0c551f03eb6a3163f32cbc14713cd1a9bb/prophyle/prophyle_propagation_preprocessing.py#L43
 """
+
+
 def autocomplete_internal_node_names(tree):
     logger.info("Autocompleting internal node names")
 
@@ -56,8 +57,11 @@ def assign_cluster_colors(labels):
     # Generate a color palette with enough distinct colors
     base_palette = sns.color_palette("muted", as_cmap=False).as_hex()
     if n_colors > len(base_palette):
-        logger.warning(f"{n_colors} is more than in the seaborn palette. Adding new colors with different brightness.")
-        extended_palette = base_palette + sns.color_palette("muted", n_colors-len(base_palette), desat=0.6).as_hex()
+        logger.warning(
+            f"{n_colors} is more than in the seaborn palette. Adding new colors with different brightness."
+        )
+        extended_palette = base_palette + sns.color_palette(
+            "muted", n_colors - len(base_palette), desat=0.6).as_hex()
     else:
         extended_palette = base_palette
 
@@ -65,11 +69,15 @@ def assign_cluster_colors(labels):
     logger.debug(f"Available colors: {colors}")
 
     # Initialize label_color_map with regular clusters
-    label_color_map = {label: colors[i] for i, label in enumerate(unique_labels) if label != -1}
+    label_color_map = {
+        label: colors[i]
+        for i, label in enumerate(unique_labels) if label != -1
+    }
 
     # If -1 is in labels, assign it the last color from the palette
     if -1 in unique_labels:
-        label_color_map[-1] = colors[-1]  # Assigning the last color in the palette to -1
+        label_color_map[-1] = colors[
+            -1]  # Assigning the last color in the palette to -1
 
     return label_color_map
 
@@ -78,9 +86,11 @@ def cluster_internalnodes(node):
     if node.is_leaf():
         return node.cluster
     else:
-        child_clusters = set(cluster_internalnodes(child) for child in node.children)
+        child_clusters = set(
+            cluster_internalnodes(child) for child in node.children)
         if len(child_clusters) == 1:
-            node_cluster = child_clusters.pop()  # All children have the same cluster
+            node_cluster = child_clusters.pop(
+            )  # All children have the same cluster
         else:
             node_cluster = "NaN"  # Children have different clusters
 
@@ -89,17 +99,25 @@ def cluster_internalnodes(node):
 
 
 def create_colorrange_annots(tree, outfile, cluster_to_color):
-    itol_dataset_lines = ["DATASET_RANGE", "SEPARATOR COMMA", "DATASET_LABEL,Cluster",  "COLOR,#ffff00", "DATA"]
+    itol_dataset_lines = [
+        "DATASET_RANGE", "SEPARATOR COMMA", "DATASET_LABEL,Cluster",
+        "COLOR,#ffff00", "DATA"
+    ]
 
     def process_node(node, parent_cluster=None):
-        logger.debug(f"Node: {node.name} Parent Cluster: {parent_cluster} Node Cluster: {node.cluster}")
+        logger.debug(
+            f"Node: {node.name} Parent Cluster: {parent_cluster} Node Cluster: {node.cluster}"
+        )
 
         if str(node.cluster) != 'NaN' and node.cluster != parent_cluster:
             logger.debug(f"Appended node to data file.")
-            itol_dataset_lines.append(f"{node.name},{node.name},{cluster_to_color[node.cluster]},,,,,{node.cluster}")
+            itol_dataset_lines.append(
+                f"{node.name},{node.name},{cluster_to_color[node.cluster]},,,,,{node.cluster}"
+            )
 
         # Process children, but pass 'NaN' if current node's color is 'NaN'
-        new_parent_cluster = node.cluster if str(node.cluster) != 'NaN' else parent_cluster
+        new_parent_cluster = node.cluster if str(
+            node.cluster) != 'NaN' else parent_cluster
         for child in node.children:
             process_node(child, new_parent_cluster)
 
@@ -109,14 +127,19 @@ def create_colorrange_annots(tree, outfile, cluster_to_color):
     with open(outfile, "w") as f:
         f.write("\n".join(itol_dataset_lines))
 
+
 def create_simplebar_annots(df, outfile):
-    itol_dataset_lines = ["DATASET_SIMPLEBAR", "SEPARATOR COMMA", "DATASET_LABEL,Difference (bp)",  "COLOR,#0000ff", "DATA"]
+    itol_dataset_lines = [
+        "DATASET_SIMPLEBAR", "SEPARATOR COMMA",
+        "DATASET_LABEL,Difference (bp)", "COLOR,#0000ff", "DATA"
+    ]
     for row in df.itertuples():
         label = row.GenomeID
         difference = row.Difference
         itol_dataset_lines.append(f"{label},{difference}")
     with open(outfile, "w") as f:
         f.write("\n".join(itol_dataset_lines))
+
 
 def main():
     parser = argparse.ArgumentParser(
@@ -167,7 +190,9 @@ def main():
     df = pd.read_csv(args.inputcsv)
     tree = Tree(args.tree, format=1)
     tree = autocomplete_internal_node_names(tree)
-    tree.write(format=1, outfile=os.path.join(args.outdir, os.path.basename(args.outdir) + ".nwk"))
+    tree.write(format=1,
+               outfile=os.path.join(args.outdir,
+                                    os.path.basename(args.outdir) + ".nwk"))
 
     id_to_cluster = dict(zip(df['GenomeID'], df['Cluster']))
     for node in tree.traverse():
@@ -183,7 +208,8 @@ def main():
     # colors = sns.color_palette("muted", n_colors=len(unique_clusters)).as_hex()
     # color_pal = dict(zip(unique_clusters, colors))
     logger.debug(f"Color palette: {color_pal}")
-    create_colorrange_annots(tree, os.path.join(args.outdir, "colorrange.annot"), color_pal)
+    create_colorrange_annots(tree, os.path.join(args.outdir,
+                                                "colorrange.annot"), color_pal)
     create_simplebar_annots(df, os.path.join(args.outdir, "simplebar.annot"))
     logger.success("Created annotation files successfully")
 

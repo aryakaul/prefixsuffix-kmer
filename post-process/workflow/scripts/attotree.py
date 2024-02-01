@@ -57,7 +57,12 @@ def message(*msg):
     print(log_line, file=sys.stderr)
 
 
-def run_safe(command, output_fn=None, output_fo=None, err_msg=None, thr_exc=True, silent=False):
+def run_safe(command,
+             output_fn=None,
+             output_fo=None,
+             err_msg=None,
+             thr_exc=True,
+             silent=False):
     """
     Executes a shell command safely.
 
@@ -102,9 +107,13 @@ def run_safe(command, output_fn=None, output_fo=None, err_msg=None, thr_exc=True
         out_fo = open(output_fn, "w+")
 
     if out_fo == sys.stdout:
-        p = subprocess.Popen("/bin/bash -e -o pipefail -c '{}'".format(command_str), shell=True)
+        p = subprocess.Popen(
+            "/bin/bash -e -o pipefail -c '{}'".format(command_str), shell=True)
     else:
-        p = subprocess.Popen("/bin/bash -e -o pipefail -c '{}'".format(command_str), shell=True, stdout=out_fo)
+        p = subprocess.Popen(
+            "/bin/bash -e -o pipefail -c '{}'".format(command_str),
+            shell=True,
+            stdout=out_fo)
 
     error_code = None
     while error_code is None:
@@ -120,7 +129,8 @@ def run_safe(command, output_fn=None, output_fo=None, err_msg=None, thr_exc=True
         if not silent:
             message("Finished: {}".format(command_str))
     else:
-        message("Unfinished, an error occurred (error code {}): {}".format(error_code, command_str))
+        message("Unfinished, an error occurred (error code {}): {}".format(
+            error_code, command_str))
 
         if err_msg is not None:
             print('Error: {}'.format(err_msg), file=sys.stderr)
@@ -292,7 +302,8 @@ def main():
         def format_help(self):
             formatter = self._get_formatter()
             formatter.add_text(" \n" + self.description)
-            formatter.add_usage(self.usage, self._actions, self._mutually_exclusive_groups)
+            formatter.add_usage(self.usage, self._actions,
+                                self._mutually_exclusive_groups)
             formatter.add_text(self.epilog)
 
             # positionals, optionals and user-defined groups
@@ -306,8 +317,8 @@ def main():
 
     parser = CustomArgumentParser(
         formatter_class=argparse.RawTextHelpFormatter,
-        description="Program: {} ({})\n".format(PROGRAM, DESC) + "Version: \n" +
-        "Author:  Karel Brinda <karel.brinda@inria.fr>",
+        description="Program: {} ({})\n".format(PROGRAM, DESC) +
+        "Version: \n" + "Author:  Karel Brinda <karel.brinda@inria.fr>",
     )
 
     parser.add_argument(
@@ -365,13 +376,20 @@ def main():
     parser.add_argument(
         'genomes',
         nargs="+",
-        help='input genome file (fasta / gzipped fasta / list of files when "-L")',
+        help=
+        'input genome file (fasta / gzipped fasta / list of files when "-L")',
     )
 
     args = parser.parse_args()
 
     #print(args)
-    attotree(fns=args.genomes, k=args.k, s=args.s, t=args.t, newick_fo=args.o, phylogeny_algorithm=args.f, fof=args.L)
+    attotree(fns=args.genomes,
+             k=args.k,
+             s=args.s,
+             t=args.t,
+             newick_fo=args.o,
+             phylogeny_algorithm=args.f,
+             fof=args.L)
 
     args = parser.parse_args()
 

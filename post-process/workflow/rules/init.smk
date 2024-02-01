@@ -129,8 +129,10 @@ def fn_colorrange_annot(_batch, _genebatch, _passinggene):
 def fn_simplebar_annot(_batch, _genebatch, _passinggene):
     return f"{dir_intermediate()}/decompressed_genomes/{_batch}/{_genebatch}/{_passinggene}--itol/simplebar.annot"
 
+
 def fn_newtree(_batch, _genebatch, _passinggene):
     return f"{dir_intermediate()}/decompressed_genomes/{_batch}/{_genebatch}/{_passinggene}--itol/{_passinggene}--itol.nwk"
+
 
 def chkpntaggregate_regionalfastas(wildcards):
     checkpoint_output = checkpoints.region_decompression.get(**wildcards).output[0]

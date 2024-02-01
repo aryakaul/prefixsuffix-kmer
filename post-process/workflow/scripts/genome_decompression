@@ -41,7 +41,8 @@ def sample_clusters(df, maxgenomes):
         if count > ideal_samples_per_cluster:
             sampled_df = pd.concat([
                 sampled_df,
-                df[df['Cluster'] == cluster].sample(ideal_samples_per_cluster, random_state=1)
+                df[df['Cluster'] == cluster].sample(ideal_samples_per_cluster,
+                                                    random_state=1)
             ])
         else:
             sampled_df = pd.concat([sampled_df, df[df['Cluster'] == cluster]])

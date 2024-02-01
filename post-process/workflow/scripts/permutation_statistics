@@ -8,6 +8,7 @@ import os
 from ete3 import Tree
 import seaborn as sns
 
+
 def permute_and_compute(tree, clusters):
     random.shuffle(clusters)
     for node, cluster in zip(tree.iter_leaves(), clusters):
@@ -16,7 +17,8 @@ def permute_and_compute(tree, clusters):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Permutation test of leaf labels for a given phylogeny")
+    parser = argparse.ArgumentParser(
+        description="Permutation test of leaf labels for a given phylogeny")
     parser.add_argument(
         "-i",
         "--inputdir",
