@@ -3,7 +3,4 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - pandas
-  - loguru
-  - seaborn
-  - ete3
+  - attotree

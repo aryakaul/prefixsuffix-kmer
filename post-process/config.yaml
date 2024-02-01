@@ -23,3 +23,5 @@ bakta_db:             /n/data1/hms/dbmi/baym/databases/bakta_dbv5/db
 # (1) General parameters; notes:
 #     - cluster sample size is
 cluster_sample_size:    4
+window_size:            5000
+number_genomes:         500
