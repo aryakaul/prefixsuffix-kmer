@@ -93,14 +93,31 @@ curl -L https://github.com/aryakaul/prefixsuffix-kmer/tarball/main \
 
   Such a list can be generated, for instance, by `find` by
   ```bash
-  find ~/dir_with_my_genomes -name '*.fa' > input/my_first_batch.txt
+  $ find ~/dir_with_my_genomes -name '*.tar.gz' > input/my_first_batch.txt
   ```
-  The supported input file formats include FASTA and FASTQ (possibly compressed by GZip).
+  The supported input file format is a collection of .fa files tar.xz compressed. For
+  example,
+  ```bash
+  $ head -4 input/my_first_batch.txt
+  ~/dir_with_my_genomes/staphylococcus_aureus__01.tar.xz
+  ~/dir_with_my_genomes/staphylococcus_aureus__02.tar.xz
+  ~/dir_with_my_genomes/escherichia_coli__01.tar.xz
+  ~/dir_with_my_genomes/escherichia_coli__02.tar.xz
+
+  $ tar -tf ~/dir_with_my_genomes/staphylococcus_aureus__01.tar.xz | head -4
+  staphylococcus_aureus__01/SAMN001.fa
+  staphylococcus_aureus__01/SAMN002.fa
+  staphylococcus_aureus__01/SAMN003.fa
+  staphylococcus_aureus__01/SAMN004.fa
+  ```
+  You can find different large collections of genomes in this format
+  (including the 661k collection) here: [MOF collections](https://brinda.eu/mof/#collections)
+
 
 * ***Step 2: Provide genes.*** \
   The gene files should be named `input/{genes}.ffn`,
   and should be in FASTA format. You can provide multiple
-  independent files.
+  files.
 
 * ***Step 3 (optional): Adjust configuration.*** \
   By editing [`config.yaml`](config.yaml) it is possible to specify
