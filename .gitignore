@@ -3,3 +3,8 @@
 .ipynb_checkpoints/
 *.ipynb
 figs/
+input/
+intermediate/
+output/
+manual/
+snakemake.*

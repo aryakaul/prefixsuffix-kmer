@@ -1,4 +1,4 @@
-.PHONY: all help clean cleanall cleanallall test reports format edit conda viewconf
+.PHONY: all help clean cleanall cleanallall test reports format edit conda viewconf cluster
 
 SHELL=/usr/bin/env bash -eo pipefail
 
@@ -44,7 +44,10 @@ endif
 ######################
 
 all: ## Run everything
-	snakemake --cores all $(CONDA_PARAMS) -p --rerun-incomplete $(SNAKEMAKE_PARAM_DIR)
+	snakemake --cores all $(CONDA_PARAMS) -p --keep-going --retries 10 --rerun-incomplete $(SNAKEMAKE_PARAM_DIR)
+
+cluster: ## Run everything but on the CLUSTER
+	snakemake $(CONDA_PARAMS) --profile o2profile -p --rerun-incomplete $(SNAKEMAKE_PARAM_DIR) --executor cluster-generic
 
 help: ## Print help messages
 	@printf "$$(grep -hE '^\S*(:.*)?##' $(MAKEFILE_LIST) \

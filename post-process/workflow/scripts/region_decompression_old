@@ -1,0 +1,198 @@
+#!/usr/bin/env python
+
+import argparse
+import os
+import pandas as pd
+import subprocess
+from Bio import SeqIO
+import sys
+from Bio.SeqRecord import SeqRecord
+from loguru import logger
+from pathlib import Path
+from Bio.Seq import reverse_complement
+import multiprocessing
+
+
+def process_bucket(group, file_mapping, window_size, extraction_dir, middle):
+    bucket = group["Bucket"].iloc[0]
+    archive_file = file_mapping.get(bucket)
+
+    if not archive_file:
+        logger.warning(f"No archive file found for Bucket: {bucket}")
+        return
+
+    # Create a set of unique contigs for lookup
+    contig_set = set(group["Contig"])
+
+    # Decompress the archive file once for the entire group
+    tar_command = f"tar -xOJf {archive_file} {bucket}"
+    try:
+        with subprocess.Popen(tar_command,
+                              shell=True,
+                              stdout=subprocess.PIPE,
+                              text=True) as proc:
+            if proc.stdout is not None:
+                for record in SeqIO.parse(proc.stdout, "fasta"):
+                    if record.id in contig_set:
+                        # Process all rows for the matched contig
+                        matched_rows = group[group["Contig"] == record.id]
+                        for _, row in matched_rows.iterrows():
+                            output_filename = os.path.join(
+                                extraction_dir, f"{record.id}.fasta")
+                            regions = extract_region(
+                                record.seq,
+                                int(row["PrefixLocation"]),
+                                int(row["SuffixLocation"]),
+                                window_size,
+                                middle,
+                            )
+                            records = []
+                            for start, end in regions:
+                                extracted_seq = record.seq[start:end]
+                                new_record = SeqRecord(
+                                    extracted_seq,
+                                    id=f"{record.id}_{start}_{end}",
+                                    description="",
+                                )
+                                records.append(new_record)
+                            with open(output_filename, "w") as output_handle:
+                                SeqIO.write(records, output_handle, "fasta")
+                            logger.info(
+                                f"Extracted sequences written to {output_filename}"
+                            )
+    except subprocess.CalledProcessError as e:
+        logger.error(f"Error in processing: {e}")
+
+
+def process_bucket_group_wrapper(args):
+    group, file_mapping, window_size, extraction_dir, middle = args
+    return process_bucket(group, file_mapping, window_size, extraction_dir,
+                          middle)
+
+
+def get_bounds(loc, seq_len, window):
+    logger.debug(f"{loc} being analyzed")
+    is_neg = str(loc).startswith("-")
+    loc = -loc if is_neg else loc
+    start = max(0, loc - window)
+    end = min(loc + window, seq_len)
+    logger.debug(f"Start is now: {start} End is now: {end}.")
+
+    # Check for out-of-bounds and log warnings
+    if start != loc - window:
+        logger.warning(
+            f"Adjusted out-of-bounds start window for location {loc} (negative strand: {is_neg}) in contig"
+        )
+    if end != loc + window:
+        logger.warning(
+            f"Adjusted out-of-bounds end window for location {loc} (negative strand: {is_neg}) in contig"
+        )
+
+    return start, end
+
+
+def extract_region(seq, loc1, loc2, window, middle):
+    if not middle:
+        start1, end1 = get_bounds(loc1, len(seq), window)
+        start2, end2 = get_bounds(loc2, len(seq), window)
+
+        # Check for overlap between the two intervals
+        if max(start1, start2) < min(end1, end2):
+            # Overlapping regions
+            logger.debug("Overlapping regions detected, merging them.")
+            combined_start = min(start1, start2)
+            combined_end = max(end1, end2)
+            # regions = [(combined_start, combined_end, is_neg1 or is_neg2)]
+            regions = [(combined_start, combined_end)]
+        else:
+            # Non-overlapping regions
+            regions = [(start1, end1), (start2, end2)]
+    else:
+        start1, end1 = get_bounds(loc1, len(seq), window)
+        start2, end2 = get_bounds(loc2, len(seq), window)
+
+        # Create a single region from the start of the first region to the end of the second region
+        regions = [(min(start1, start2), max(end1, end2))]
+
+    logger.debug(f"Regions to extract: {regions}")
+    return regions
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description=
+        "Extract FASTA sequences from tar archives based on CSV input")
+    parser.add_argument("-i",
+                        "--inputcsv",
+                        required=True,
+                        type=str,
+                        help="Path to the Cluster CSV file")
+    parser.add_argument(
+        "-f",
+        "--inputfof",
+        type=str,
+        required=True,
+        help="Input file of files",
+    )
+    parser.add_argument(
+        "-e",
+        "--extraction_dir",
+        type=str,
+        required=True,
+        help="Extraction directory",
+    )
+    parser.add_argument(
+        "-w",
+        "--window",
+        type=int,
+        default=500,
+        help="Length of maximum window around hits, default is 500 bp",
+    )
+    parser.add_argument(
+        "-m",
+        "--middle",
+        action='store_true',
+        required=False,
+        help=
+        "Extract all bp in-between prefix/suffix match + window size on each flank. Default is False."
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help=
+        "Increase verbosity level. Can be specified multiple times for more detailed logs.",
+    )
+
+    args = parser.parse_args()
+
+    os.makedirs(args.extraction_dir, exist_ok=True)
+
+    if args.verbose == 0:
+        logger.remove()
+    elif args.verbose == 1:
+        logger.remove()
+        logger.add(sys.stderr, level="INFO")
+    elif args.verbose >= 2:
+        logger.remove()
+        logger.add(sys.stderr, level="DEBUG")
+
+    df = pd.read_csv(args.inputcsv)
+    file_mapping = {}
+    with open(args.inputfof, "r") as f:
+        for line in f:
+            bucket_name = os.path.basename(line.strip()).split(".tar.xz")[0]
+            file_mapping[bucket_name] = str(line.strip())
+
+    grouped = df.groupby("Bucket")
+    with multiprocessing.Pool() as pool:
+        pool.map(
+            process_bucket_group_wrapper,
+            [(group, file_mapping, args.window, args.extraction_dir,
+              args.middle) for _, group in grouped],
+        )
+
+
+if __name__ == "__main__":
+    main()

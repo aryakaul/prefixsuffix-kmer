@@ -1,0 +1,212 @@
+#!/usr/bin/env python
+
+import pandas as pd
+import multiprocessing
+import argparse
+import glob
+import tarfile
+from loguru import logger
+import sys
+import os
+import subprocess
+import concurrent.futures
+
+
+def get_hq(hq_file, allthebact=False):
+    if allthebact:
+        metadata_df = pd.read_csv(hq_file, sep='\t', header=None, names=['sample_id'])
+        hq_samples = metadata_df['sample_id']
+    else:
+        metadata_df = pd.read_csv(hq_file, sep='\t')
+        hq_samples = metadata_df.loc[metadata_df['high_quality'] ==
+                                     True]['sample_id']
+    return hq_samples
+
+def sample_dupseqs(df, maxgenomes, dup_file):
+    if maxgenomes >= len(df):
+        logger.warning("Warning: maxgenomes is greater than the number of available genomes. Returning the entire dataframe.")
+        return df
+
+    # Step 1: Load duplicates file and extract contig information
+    dup_df = pd.read_csv(dup_file, sep='\t', header=None, names=['Abundance', 'FastaDescriptions'])
+    dup_df['Contigs'] = dup_df['FastaDescriptions'].apply(
+        lambda x: ', '.join([f"{part.split('_')[0]}" for part in x.split(', ')])
+    )
+    unique_sequences = dup_df.shape[0]
+    logger.info(f"{unique_sequences} unique sequences exist")
+
+    # Step 2: Calculate ideal samples per sequence with minimum of one per sequence
+    ideal_samples_per_seq = maxgenomes // unique_sequences
+    logger.info(f"{ideal_samples_per_seq} samples per sequence")
+
+    # Step 3: Sample genomes from each sequence group
+    sampled_df = pd.DataFrame()
+    remaining_genomes = maxgenomes
+
+    for _, row in dup_df.iterrows():
+        seq = row['Contigs']
+        abundance = row['Abundance']
+        logger.info(f"{abundance} samples with this sequence")
+
+        # Get rows in the main df for this sequence
+        sequence_subset = df[df['Contig'].isin(seq.split(', '))]
+
+        if len(sequence_subset) != abundance:
+            logger.warning(f"{len(sequence_subset)} != {abundance}. Likely because filtering high-quality genomes removed some.")
+
+
+        # Minimum allocation of 1, or ideal_samples_per_seq if abundance allows
+        sample_count = min(ideal_samples_per_seq, abundance, len(sequence_subset))
+        logger.info(f"Sampling {sample_count} of them")
+
+        # Sample from this sequence and add to the sampled_df
+        sampled_rows = sequence_subset.sample(sample_count, random_state=1)
+        sampled_df = pd.concat([sampled_df, sampled_rows])
+
+        remaining_genomes -= len(sampled_rows)
+
+    logger.debug(f"{remaining_genomes} left to sample. Going back to grab more.")
+
+    # Step 4: Distribute remaining samples if maxgenomes is not yet reached
+    if remaining_genomes > 0:
+        # Filter df to include only rows with Contigs in dup_df['Contigs'] and exclude already sampled rows
+        available_for_resampling = df[
+            df['Contig'].isin(
+                [contig for seq in dup_df['Contigs'] for contig in seq.split(', ')]
+            ) & ~df.index.isin(sampled_df.index)
+        ]
+
+        additional_samples = available_for_resampling.sample(remaining_genomes, random_state=1)
+        sampled_df = pd.concat([sampled_df, additional_samples])
+
+    return sampled_df.reset_index(drop=True)
+
+
+def sample_clusters(df, maxgenomes):
+    if maxgenomes >= len(df):
+        logger.warning(
+            "Warning: maxgenomes is greater than the number of available genomes. Returning the entire dataframe."
+        )
+        return df
+
+    # Step 1: Find unique clusters and their counts
+    # unique_clusters = df.loc[df['Cluster'] != '-1']['Cluster'].value_counts()
+    unique_clusters = df['Cluster'].value_counts()
+    logger.info(f"{len(unique_clusters)} unique clusters exist")
+
+    # Step 2: Calculate the ideal number of samples per cluster
+    ideal_samples_per_cluster = maxgenomes // len(unique_clusters)
+    logger.info(f"{ideal_samples_per_cluster} samples per cluster")
+
+    # Step 3: Sample from each cluster
+    sampled_df = pd.DataFrame()
+    for cluster, count in unique_clusters.items():
+        if count > ideal_samples_per_cluster:
+            sampled_df = pd.concat([
+                sampled_df,
+                df[df['Cluster'] == cluster].sample(ideal_samples_per_cluster,
+                                                    random_state=1)
+            ])
+        else:
+            sampled_df = pd.concat([sampled_df, df[df['Cluster'] == cluster]])
+
+    # Step 4: Distribute remaining quota if maxgenomes is not reached
+    remaining_genomes = maxgenomes - len(sampled_df)
+    if remaining_genomes > 0:
+        excess_clusters = df[~df.index.isin(sampled_df.index)]
+        additional_samples = excess_clusters.sample(remaining_genomes)
+        sampled_df = pd.concat([sampled_df, additional_samples])
+    return sampled_df
+
+def main():
+    parser = argparse.ArgumentParser(description="Gene clustering script.")
+    parser.add_argument(
+        "-i",
+        "--inputcsv",
+        type=str,
+        required=True,
+        help="Input CSV output for a passing gene",
+    )
+    parser.add_argument(
+        "-m",
+        "--maxgenomes",
+        type=int,
+        default=1000,
+        help="Max. number of genomes to decompress",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        required=True,
+        help=
+        "Path to the output downsampled dataframe that contains the paths to the extracted cluster reps."
+    )
+    parser.add_argument(
+        "-q",
+        "--metadata",
+        type=str,
+        help="QC metadata file for 661K/AllTheBact collection",
+        required=False,
+    )
+    parser.add_argument(
+        "-a",
+        "--allthebact",
+        action='store_true',
+        help="FLag to see if it's the AllTheBact dataset",
+        default=False,
+        required=False,
+    )
+    parser.add_argument(
+        "--duplicate_seqs",
+        type=str,
+        required=False,
+        help="Path to a file describing duplicate sequences counts from seqkit rmdup",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help=
+        "Increase verbosity level. Can be specified multiple times for more detailed logs.",
+    )
+
+    args = parser.parse_args()
+
+    if args.verbose == 0:
+        logger.remove()
+    elif args.verbose == 1:
+        logger.remove()
+        logger.add(sys.stderr, level="INFO")
+    elif args.verbose >= 2:
+        logger.remove()
+        logger.add(sys.stderr, level="DEBUG")
+
+    logger.info("Reading input cluster csv")
+
+    df_all = pd.read_csv(args.inputcsv)
+    if args.metadata:
+        if args.allthebact:
+            hqdf = df_all.loc[df_all['GenomeID'].isin(get_hq(args.metadata, allthebact=True))]
+        else:
+            hqdf = df_all.loc[df_all['GenomeID'].isin(get_hq(args.metadata, allthebact=False))]
+
+    if len(hqdf) < args.maxgenomes:
+        logger.warning("Using non-hq genomes!")
+        df = df_all
+    else:
+        df = hqdf
+
+    if not args.duplicate_seqs:
+        downsampled_df = sample_clusters(df, args.maxgenomes)
+        downsampled_df.to_csv(args.output)
+        logger.success("Extracted all files successfully")
+    else:
+        downsampled_df = sample_dupseqs(df, args.maxgenomes, args.duplicate_seqs)
+        downsampled_df.to_csv(args.output)
+        logger.success("Extracted all files successfully")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,6 +1,6 @@
 checkpoint region_decompression:
     input:
-        clustercsv=fn_cluster_csv("{batch}", "{genebatch}", "{passinggene}"),
+        downsamplecsv=fn_downsampled_df("{batch}", "{genebatch}", "{passinggene}"),
         fof=fn_fof("{batch}"),
     output:
         directory(
@@ -11,14 +11,17 @@ checkpoint region_decompression:
         "../envs/biopython.yml"
     params:
         windowsize=config["window_size"],
+        kmerlen=config["kmer_length"],
         script=Path(workflow.basedir) / "scripts/region_decompression",
     shell:
         """
         {params.script} \\
-            -i {input.clustercsv} \\
+            -i {input.downsamplecsv} \\
             -f {input.fof} \\
             -e {output} \\
             -w {params.windowsize} \\
+            -m \\
+            -k {params.kmerlen} \\
             -vvv
         """
 
@@ -33,21 +36,13 @@ rule passinggene_fasta:
     shell:
         """
         x=$(echo "{wildcards.passinggene}" | sed 's/-len.[0-9]*//')
-        seqkit grep -n -r -p "$x" {input} > {output}
-        """
-
-
-rule region_minimap:
-    input:
-        reffasta=fn_regionfa("{batch}", "{genebatch}", "{passinggene}", "{contig}"),
-        queryfasta=fn_passinggenefasta("{batch}", "{genebatch}", "{passinggene}"),
-    output:
-        fn_minimaprawout("{batch}", "{genebatch}", "{passinggene}", "{contig}"),
-    conda:
-        "../envs/minimap2.yml"
-    shell:
-        """
-        minimap2 -x splice -un -k8 {input.reffasta} {input.queryfasta} > {output}
+        
+        # First, escape dots. Note the double escaping: once for the shell and once for sed.
+        # Second, escape plus signs.
+        # Third, replace ':' with '.', which doesn't need escaping in this context.
+        regex=$(echo "$x" | sed -e 's/\\./\\\\./g' -e 's/\\+/\\\\+/g' -e 's/:/./g')
+        
+        seqkit grep -n -r -p "$regex" {input} > {output}
         """
 
 
@@ -55,7 +50,13 @@ rule aggregate_regionalfastas:
     output:
         fn_decompregion_agg("{batch}", "{genebatch}", "{passinggene}"),
     input:
-        chkpntaggregate_regionalfastas,
+        #chkpntaggregate_regionalfastas,
+        chkpntaggregate_blastouts,
+        #fn_blastouts("{batch}", "{genebatch}", "{passinggene}"),
+        #expand(
+            #fn_blastrawout("{batch}", "{genebatch}", "{passinggene}", "{contig}"),
+            #contig=glob_wildcards("{input.reffastadir}/{contig}.fasta").contig
+        #)
     shell:
         """
         echo {input} > {output}

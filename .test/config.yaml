@@ -6,7 +6,7 @@
 input_dir:            input
 intermediate_dir:     intermediate
 output_dir:           output
-conda_dir:            .conda
+conda_dir:            ../.conda
 
 # (2) Parameters for Snakemake execution
 use_conda:            True # build conda environments automatically by Snakemake
@@ -27,4 +27,5 @@ batch_size:             500
 
 # (2) DBSCAN parameters; 
 max_distance:           500
-min_samples:            1
+min_samples:            2
+remove_outliers:        True

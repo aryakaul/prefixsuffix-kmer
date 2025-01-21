@@ -1,3 +1,12 @@
+# def get_time(wildcards, attempt):
+# if attempt == 1:
+# return "0-02:00:00"
+# if attempt == 2:
+# return "0-05:00:00"
+# if attempt == 3:
+# return "0-10:00:00"
+
+
 rule fastmap_process:
     output:
         fn_fastmapprocess(
@@ -30,6 +39,8 @@ rule fastmap_distances:
         script=Path(workflow.basedir) / "scripts/analyze_fastmapout",
         kmer_length=config["kmer_length"],
         gap_distance=config["gap_distance"],
+    resources:
+        mem_gb=200,
     shell:
         """
         {params.script} \\
@@ -49,6 +60,8 @@ rule parse_distances:
         "../envs/pandas.yml"
     params:
         script=Path(workflow.basedir) / "scripts/parse_distances",
+    # resources:
+    # time=get_time
     shell:
         """
         mkdir -p $(dirname {output})

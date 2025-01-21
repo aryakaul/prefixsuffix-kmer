@@ -4,11 +4,11 @@
 
 # (1) Directories for individual stages of the workflow
 input_dir:            input
-previnput_dir:        ../input
-intermediate_dir:     intermediate
-previntermediate_dir: ../intermediate
-output_dir:           output
-prevoutput_dir:       ../output
+intermediate_dir:     /n/scratch/users/a/ak586/refseqpost-intermediate-800dist-25minsamp
+output_dir:           /n/scratch/users/a/ak586/refseqpost-output-800dist-25minsamp
+previnput_dir:        ../input/refseq-genes
+previntermediate_dir:     /n/scratch/users/a/ak586/refseq-intermediate-800dist-25minsamp
+prevoutput_dir:           /n/scratch/users/a/ak586/refseq-output-800dist-25minsamp
 conda_dir:            .conda
 
 # (2) Parameters for Snakemake execution
@@ -21,7 +21,9 @@ bakta_db:             /n/data1/hms/dbmi/baym/databases/bakta_dbv5/db
 ##############
 
 # (1) General parameters; notes:
-#     - cluster sample size is
-cluster_sample_size:    4
-window_size:            5000
-number_genomes:         500
+number_genomes:               500
+window_size:                  500
+kmer_length:                  26
+
+number_annotate:              4
+number_matching_decompress:   0

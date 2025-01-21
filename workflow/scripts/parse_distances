@@ -26,21 +26,30 @@ def preprocess_data(df):
     """
     Preprocess the DataFrame: Convert 'Difference' to numeric and filter non-NaN rows.
     """
+    logger.debug("Starting preprocessing of data")
     df['Difference'] = pd.to_numeric(df['Difference'], errors='coerce')
-    return df[df['Difference'].notna()].copy()
+    filtered_df = df[df['Difference'].notna()].copy()
+    logger.info("Preprocessed data, {} rows remaining after filtering",
+                len(filtered_df))
+    logger.debug("Filtered DataFrame head:\n{}", filtered_df.head())
+    return filtered_df
 
 
 def extract_genome_id(contig_value):
     """
     Extract genome ID from 'Contig' column.
     """
-    return contig_value.split('.')[0] if pd.notna(contig_value) else None
+    genome_id = contig_value.split('.')[0] if pd.notna(contig_value) else None
+    # logger.debug("Extracted genome ID {} from contig value {}", genome_id, contig_value)
+    return genome_id
 
 
 def find_closest_differences(df):
     """
     Find the rows with 'Difference' closest to 0 for each GenomeID and GeneID pair.
     """
+    logger.debug(
+        "Finding closest differences for each GenomeID and GeneID pair")
     df['GenomeID'] = df['Contig'].apply(extract_genome_id)
 
     # Function to find the row with closest 'Difference'
@@ -52,6 +61,11 @@ def find_closest_differences(df):
 
     # Reset index to flatten the DataFrame
     closest_diff_df.reset_index(drop=True, inplace=True)
+
+    logger.info("Found closest differences, resulting DataFrame has {} rows",
+                len(closest_diff_df))
+    logger.debug("Closest differences DataFrame head:\n{}",
+                 closest_diff_df.head())
 
     return closest_diff_df
 
@@ -83,7 +97,6 @@ def main():
     filtered_df = preprocess_data(df)
     closest_diff_df = find_closest_differences(filtered_df)
     logger.info("Found closest differences per genome/gene!")
-    # logger.info("Closest differences per genome:\n{}", closest_diff_df)
     save_to_file(closest_diff_df, args.output)
     logger.success(f"File saved to {args.output}")
 

@@ -4,12 +4,14 @@ import sys
 import os
 import argparse
 from loguru import logger
+import gzip
+from pathlib import Path
 
 
 def parse_fastmap_output(file_path):
     parsed_kmers = 0
     parsed_data = []
-    with open(file_path, "r") as file:
+    with gzip.open(file_path, "rt") as file:
         genome_id = None
         seq_id = None
         for line in file:
@@ -25,6 +27,11 @@ def parse_fastmap_output(file_path):
                 mappings = parts[4:4 + num_mappings]
                 logger.debug(f"{num_mappings} mappings found for {seq_id}")
                 for mapping in mappings:
+                    if mapping == "*":
+                        logger.warning(
+                            f"Too many hits for {seq_id} - BWTSA failed. Skipping."
+                        )
+                        break
                     contigid, location = mapping.split(":")
                     genome_id = contigid.split('.')[0]
                     parsed_data.append([genome_id, seq_id, contigid, location])
@@ -41,7 +48,7 @@ def parse_fastmap_output(file_path):
 
 
 def write_to_tsv(data, output):
-    with open(output, "w") as o:
+    with gzip.open(output, "wt") as o:
         o.write("genomeID\tkmerID\tContig\tLocation\n")
         for lines in data:
             o.write(f"{lines[0]}\t{lines[1]}\t{lines[2]}\t{lines[3]}\n")
@@ -93,6 +100,7 @@ def main():
 
     data = parse_fastmap_output(args.input)
     logger.info(f"Writing {len(data)} fastmapped locations to {args.output}")
+    Path(os.path.dirname(args.output)).mkdir(parents=True, exist_ok=True)
     write_to_tsv(data, args.output)
 
 

@@ -4,12 +4,13 @@ checkpoint cluster_dists:
     input:
         filterdists=aggregate_filter_dists,
     conda:
-        "../envs/sklearn.yml"
+        "../envs/dbscan.yml"
     params:
         epsilon=config["max_distance"],
         min_samples=config["min_samples"],
         intermediate=config["intermediate_dir"],
-        script=Path(workflow.basedir) / "scripts/cluster_dists",
+        remove_outliers=config["remove_outliers"],
+        script=Path(workflow.basedir) / "scripts/cluster_dists_duck",
     shell:
         """
         mkdir -p {output}
@@ -18,6 +19,7 @@ checkpoint cluster_dists:
                 -o {output} \\
                 --epsilon {params.epsilon} \\
                 --min_samples {params.min_samples} \\
+                --remove_outliers \\
                 -vv 
         """
 
@@ -27,6 +29,10 @@ rule aggregate_2:
         f"{dir_output()}" + "/passing_genes-{batch}-{genebatch}.txt",
     input:
         aggregate_passing_genes,
+    resources:
+        mem_gb=1,
+        time="0-00:05:00",
+        threads=2,
     shell:
         """
         echo {input} > {output}

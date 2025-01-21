@@ -1,0 +1,11 @@
+channels:
+  - etetoolkit
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - ete3
+  - loguru
+  - pandas
+  - seaborn
+  - csvtk

@@ -6,14 +6,16 @@ import pandas as pd
 import subprocess
 from Bio import SeqIO
 import sys
+from io import TextIOWrapper
 from Bio.SeqRecord import SeqRecord
 from loguru import logger
 from pathlib import Path
 from Bio.Seq import reverse_complement
 import multiprocessing
+import tarfile
 
 
-def process_bucket(group, file_mapping, window_size, extraction_dir):
+def process_bucket(group, file_mapping, window_size, extraction_dir, middle, k):
     bucket = group["Bucket"].iloc[0]
     archive_file = file_mapping.get(bucket)
 
@@ -24,48 +26,78 @@ def process_bucket(group, file_mapping, window_size, extraction_dir):
     # Create a set of unique contigs for lookup
     contig_set = set(group["Contig"])
 
-    # Decompress the archive file once for the entire group
-    tar_command = f"tar -xOJf {archive_file} {bucket}"
+    # Create a set of unique genome filenames to decompress
+    genome_set = set(group["GenomeID"])
+
     try:
-        with subprocess.Popen(tar_command,
-                              shell=True,
-                              stdout=subprocess.PIPE,
-                              text=True) as proc:
-            if proc.stdout is not None:
-                for record in SeqIO.parse(proc.stdout, "fasta"):
-                    if record.id in contig_set:
-                        # Process all rows for the matched contig
-                        matched_rows = group[group["Contig"] == record.id]
-                        for _, row in matched_rows.iterrows():
-                            regions = extract_region(
-                                record.seq,
-                                int(row["PrefixLocation"]),
-                                int(row["SuffixLocation"]),
-                                window_size,
-                            )
-                            records = []
-                            for start, end in regions:
-                                extracted_seq = record.seq[start:end]
-                                new_record = SeqRecord(
-                                    extracted_seq,
-                                    id=f"{record.id}_{start}_{end}",
-                                    description="",
-                                )
-                                records.append(new_record)
-                            output_filename = os.path.join(
-                                extraction_dir, f"{record.id}.fasta")
-                            with open(output_filename, "w") as output_handle:
-                                SeqIO.write(records, output_handle, "fasta")
-                            logger.info(
-                                f"Extracted sequences written to {output_filename}"
-                            )
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Error in processing: {e}")
+        with tarfile.open(archive_file, "r:xz") as tar:
+            for member in tar.getmembers():
+                basename = os.path.basename(member.name)
+                curr_genomeid, _ = os.path.splitext(basename)
+                if curr_genomeid in genome_set:
+                    # Extract and process the matched member
+                    f = tar.extractfile(member)
+                    with TextIOWrapper(f, encoding='utf-8') as text_file:
+                        for record in SeqIO.parse(text_file, "fasta"):
+                            # Process each record if its ID is in the contig set
+                            if record.id in contig_set:
+                                matched_rows = group[group["Contig"] == record.id]
+                                for _, row in matched_rows.iterrows():
+                                    output_filename = os.path.join(
+                                        extraction_dir, f"{record.id}.fasta")
+                                    prefix = int(row['PrefixLocation'])
+                                    suffix = int(row['SuffixLocation'])
+                                    if prefix > 0 and suffix > 0:
+                                        regions = extract_region(
+                                            record.seq,
+                                            prefix-1,
+                                            suffix+k,
+                                            window_size,
+                                            middle,
+                                        )
+                                    elif prefix < 0 and suffix < 0:
+                                        regions = extract_region(
+                                            record.seq,
+                                            prefix-k,
+                                            suffix+1,
+                                            window_size,
+                                            middle,
+                                        )
+                                    else:
+                                        logger.error(f"Prefix: {prefix}, Suffix: {suffix}")
+                                        return
+                                    records = []
+                                    for start, end in regions:
+                                        extracted_seq = record.seq[start:end-1]
+                                        new_record = SeqRecord(
+                                            extracted_seq,
+                                            id=f"{record.id}_{start}_{end}",
+                                            description="",
+                                        )
+                                        if prefix < 0 and suffix < 0:
+                                            rc_seq = new_record.seq.reverse_complement()
+                                            rc_record = SeqRecord(
+                                                rc_seq,
+                                                id=f"{record.id}_{start}_{end}_rc",
+                                                description=""
+                                            )
+                                            records.append(rc_record)
+                                        else:
+                                            records.append(new_record)
+                                    with open(output_filename, "w") as output_handle:
+                                        SeqIO.write(records, output_handle, "fasta")
+                                    logger.info(
+                                        f"Extracted sequences written to {output_filename}"
+                                    )
+
+    except tarfile.TarError as e:
+        logger.error(f"Error in processing archive {archive_file}: {e}")
 
 
 def process_bucket_group_wrapper(args):
-    group, file_mapping, window_size, extraction_dir = args
-    return process_bucket(group, file_mapping, window_size, extraction_dir)
+    group, file_mapping, window_size, extraction_dir, middle, k = args
+    return process_bucket(group, file_mapping, window_size, extraction_dir,
+                          middle, k)
 
 
 def get_bounds(loc, seq_len, window):
@@ -86,26 +118,30 @@ def get_bounds(loc, seq_len, window):
             f"Adjusted out-of-bounds end window for location {loc} (negative strand: {is_neg}) in contig"
         )
 
-    # return start, end, is_neg
     return start, end
 
 
-def extract_region(seq, loc1, loc2, window):
-    start1, end1 = get_bounds(loc1, len(seq), window)
-    start2, end2 = get_bounds(loc2, len(seq), window)
+def extract_region(seq, loc1, loc2, window, middle):
+    if not middle:
+        start1, end1 = get_bounds(loc1, len(seq), window)
+        start2, end2 = get_bounds(loc2, len(seq), window)
 
-    # Check for overlap between the two intervals
-    if max(start1, start2) < min(end1, end2):
-        # Overlapping regions
-        logger.debug("Overlapping regions detected, merging them.")
-        combined_start = min(start1, start2)
-        combined_end = max(end1, end2)
-        # regions = [(combined_start, combined_end, is_neg1 or is_neg2)]
-        regions = [(combined_start, combined_end)]
+        # Check for overlap between the two intervals
+        if max(start1, start2) < min(end1, end2):
+            # Overlapping regions
+            logger.debug("Overlapping regions detected, merging them.")
+            combined_start = min(start1, start2)
+            combined_end = max(end1, end2)
+            regions = [(combined_start, combined_end)]
+        else:
+            # Non-overlapping regions
+            regions = [(start1, end1), (start2, end2)]
     else:
-        # Non-overlapping regions
-        # regions = [(start1, end1, is_neg1), (start2, end2, is_neg2)]
-        regions = [(start1, end1), (start2, end2)]
+        start1, end1 = get_bounds(loc1, len(seq), window)
+        start2, end2 = get_bounds(loc2, len(seq), window)
+
+        # Create a single region from the start of the first region to the end of the second region
+        regions = [(min(start1, start2), max(end1, end2))]
 
     logger.debug(f"Regions to extract: {regions}")
     return regions
@@ -142,6 +178,22 @@ def main():
         help="Length of maximum window around hits, default is 500 bp",
     )
     parser.add_argument(
+        "-k",
+        "--kmerlen",
+        type=int,
+        required=True,
+        help=
+        "K-mer length used."
+    )
+    parser.add_argument(
+        "-m",
+        "--middle",
+        action='store_true',
+        required=False,
+        help=
+        "Extract all bp in-between prefix/suffix match + window size on each flank. Default is False."
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         action="count",
@@ -174,8 +226,8 @@ def main():
     with multiprocessing.Pool() as pool:
         pool.map(
             process_bucket_group_wrapper,
-            [(group, file_mapping, args.window, args.extraction_dir)
-             for _, group in grouped],
+            [(group, file_mapping, args.window, args.extraction_dir,
+              args.middle, args.kmerlen) for _, group in grouped],
         )
 
 

@@ -90,8 +90,19 @@ def index_batch(args):
                 temp_fasta.flush()
 
         index_name = os.path.join(output_dir, f"{base_tar}_{batch_id:03}")
-        subprocess.run(["bwa", "index", "-p", index_name, temp_fasta.name])
-        logger.info(f"Completed indexing for batch {batch_id} in {tar_path}")
+
+        # List of index file extensions
+        extensions = [".amb", ".ann", ".bwt", ".sa", ".pac"]
+
+        # Check if all the index files exist
+        if all(os.path.exists(index_name + ext) for ext in extensions):
+            logger.info(
+                f"Index files already exist for batch {batch_id} in {tar_path}"
+            )
+        else:
+            subprocess.run(["bwa", "index", "-p", index_name, temp_fasta.name])
+            logger.info(
+                f"Completed indexing for batch {batch_id} in {tar_path}")
 
 
 def process_tar_file(fof_path, batch_size, output_dir):

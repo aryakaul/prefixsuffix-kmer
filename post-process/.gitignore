@@ -3,3 +3,4 @@
 .ipynb_checkpoints/
 *.ipynb
 supp_data/*
+snakemake.*

@@ -13,6 +13,13 @@ Code copied from Prophyle:
     https://github.com/prophyle/prophyle/blob/50419f0c551f03eb6a3163f32cbc14713cd1a9bb/prophyle/prophyle_propagation_preprocessing.py#L43
 """
 
+def is_float(string):
+    try:
+        float(string)
+        return True
+    except ValueError:
+        return False
+
 
 def autocomplete_internal_node_names(tree):
     logger.info("Autocompleting internal node names")
@@ -27,7 +34,7 @@ def autocomplete_internal_node_names(tree):
             for x in n.children:
                 assert hasattr(x, "name")
 
-            if not hasattr(n, "name") or n.name == "" or n.name is None:
+            if not hasattr(n, "name") or n.name == "" or n.name is None or is_float(n.name):
                 names = [x.name for x in n.children]
                 lmin_name = sorted(names)[0]
 
@@ -82,20 +89,20 @@ def assign_cluster_colors(labels):
     return label_color_map
 
 
-def cluster_internalnodes(node):
+def assign_internalnodes(node, attr_name):
     if node.is_leaf():
-        return node.cluster
+        return getattr(node, attr_name)
     else:
-        child_clusters = set(
-            cluster_internalnodes(child) for child in node.children)
-        if len(child_clusters) == 1:
-            node_cluster = child_clusters.pop(
-            )  # All children have the same cluster
+        child_values = set(
+            assign_internalnodes(child, attr_name) for child in node.children)
+        if len(child_values) == 1:
+            node_value = child_values.pop(
+            )  # All children have the same value for the attribute
         else:
-            node_cluster = "NaN"  # Children have different clusters
+            node_value = "NaN"  # Children have different values for the attribute
 
-        node.cluster = node_cluster
-        return node_cluster
+        setattr(node, attr_name, node_value)
+        return node_value
 
 
 def create_colorrange_annots(tree, outfile, cluster_to_color):
@@ -120,6 +127,40 @@ def create_colorrange_annots(tree, outfile, cluster_to_color):
             node.cluster) != 'NaN' else parent_cluster
         for child in node.children:
             process_node(child, new_parent_cluster)
+
+    # Start processing from the root
+    process_node(tree)
+
+    with open(outfile, "w") as f:
+        f.write("\n".join(itol_dataset_lines))
+
+
+def create_bracketrange_annots(tree, outfile, attr, vals):
+    itol_dataset_lines = [
+        "DATASET_RANGE", "SEPARATOR COMMA", f"DATASET_LABEL,{attr}",
+        "COLOR,#000000", "RANGE_TYPE,box", "LABEL_SIZE_FACTOR,5",
+        "BRACKET_STYLE,square", "SHOW_LABELS,1", "DATA"
+    ]
+
+    palette = sns.color_palette("husl", len(vals)).as_hex()
+    attr_map = {label: palette[i] for i, label in enumerate(vals)}
+
+    def process_node(node, parent_attr=None):
+        node_attr = str(getattr(node, attr))
+        logger.debug(
+            f"Node: {node.name} Parent Cluster: {parent_attr} Node {attr}: {node_attr}"
+        )
+
+        if node_attr != 'NaN' and node_attr != parent_attr:
+            logger.debug(f"Appended node to data file.")
+            itol_dataset_lines.append(
+                f"{node.name},{node.name},{attr_map[node_attr]},,{attr_map[node_attr]},solid,3,{node_attr},,,"
+            )
+
+        # Process children, but pass 'NaN' if current node's color is 'NaN'
+        new_parent_attr = node_attr if node_attr != 'NaN' else parent_attr
+        for child in node.children:
+            process_node(child, new_parent_attr)
 
     # Start processing from the root
     process_node(tree)
@@ -166,6 +207,13 @@ def main():
         help="Path to the output directory",
     )
     parser.add_argument(
+        "-m",
+        "--metadatataxonomy",
+        type=str,
+        required=False,
+        help="Path to the taxonomy data (output of kraken)",
+    )
+    parser.add_argument(
         "-v",
         "--verbose",
         action="count",
@@ -195,21 +243,44 @@ def main():
                                     os.path.basename(args.outdir) + ".nwk"))
 
     id_to_cluster = dict(zip(df['GenomeID'], df['Cluster']))
-    for node in tree.traverse():
-        if node.is_leaf():
-            node.cluster = id_to_cluster[node.name]
-            logger.debug(f"Leaf: {node.name} Cluster: {node.cluster}")
+    for leaf in tree:
+        cluster_val = id_to_cluster[leaf.name]
+        leaf.cluster = cluster_val
+        logger.debug(f"Leaf: {leaf.name} Cluster: {leaf.cluster}")
 
-    root_cluster = cluster_internalnodes(tree)
+    root_cluster = assign_internalnodes(tree, 'cluster')
     logger.info("Clusters assigned to internal nodes")
 
     color_pal = assign_cluster_colors(df['Cluster'])
-    # unique_clusters = df['Cluster'].unique()
-    # colors = sns.color_palette("muted", n_colors=len(unique_clusters)).as_hex()
-    # color_pal = dict(zip(unique_clusters, colors))
     logger.debug(f"Color palette: {color_pal}")
     create_colorrange_annots(tree, os.path.join(args.outdir,
                                                 "colorrange.annot"), color_pal)
+    if args.metadatataxonomy:
+        sp_mapping = pd.read_csv(args.metadatataxonomy, sep='\t')
+        sp_mapping.fillna('None', inplace=True)
+        columns_to_add = [
+            'major_species', 'phylum', 'class', 'order', 'family', 'genus',
+            'species'
+        ]
+        df_merged = pd.merge(df,
+                             sp_mapping[columns_to_add + ['sample_id']],
+                             left_on='GenomeID',
+                             right_on='sample_id',
+                             how='left')
+        df_merged.drop('sample_id', axis=1, inplace=True)
+        df = df_merged
+        for c in columns_to_add:
+            logger.debug(f"Adding {c} to leaf labels")
+            id_to_c = dict(zip(df['GenomeID'], df[c]))
+            for leaf in tree:
+                c_val = id_to_c[leaf.name]
+                logger.debug(f"Leaf: {leaf.name} {c}: {c_val}")
+                setattr(leaf, c, c_val)
+            assign_internalnodes(tree, c)
+            vals = df[c].unique()
+            create_bracketrange_annots(
+                tree, os.path.join(args.outdir, f"{c}-range.annot"), c, vals)
+
     create_simplebar_annots(df, os.path.join(args.outdir, "simplebar.annot"))
     logger.success("Created annotation files successfully")
 

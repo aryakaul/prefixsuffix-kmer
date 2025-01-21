@@ -1,19 +1,16 @@
 rule build_sketched_tree:
     output:
         tree_newick=fn_downsample_nwk("{batch}", "{genebatch}", "{passinggene}"),
-        filelist=f"{dir_intermediate()}"
-        + "/decompressed_genomes/{batch}/{genebatch}/{passinggene}_filelist.txt",
+        filelist=f"{{dir_intermediate()}}/decompressed_genomes/{batch}/{genebatch}/{passinggene}_filelist.txt",
     input:
         chkpntaggregate_genomefasta_dir,
-    params:
-        script=Path(workflow.basedir) / "scripts/attotree.py",
     conda:
         "../envs/attotree.yml"
     shell:
         """
         for i in {input}/*.fa; do echo $i; done > {output.filelist} 
 
-        {params.script} \\
+        attotree \\
             -L {output.filelist} \\
             -o {output.tree_newick}
         """
@@ -23,19 +20,51 @@ rule itol_annottext:
     output:
         colorrange=fn_colorrange_annot("{batch}", "{genebatch}", "{passinggene}"),
         simplebar=fn_simplebar_annot("{batch}", "{genebatch}", "{passinggene}"),
-        newtree=fn_newtree("{batch}", "{genebatch}", "{passinggene}"),
+        newtree=fn_itoltree("{batch}", "{genebatch}", "{passinggene}"),
     input:
         tree_newick=fn_downsample_nwk("{batch}", "{genebatch}", "{passinggene}"),
+        clustercsv=fn_downsampled_df("{batch}", "{genebatch}", "{passinggene}"),
     conda:
         "../envs/pandas.yml"
     params:
-        downsampled_csv=f"{dir_intermediate()}"
-        + "/decompressed_genomes/{batch}/{genebatch}/{passinggene}_downsampled.csv",
+        661kmetadata=f"{dir_intermediate()}" + "/../supp_data/File2_taxid_lineage_661K.txt",
         script=Path(workflow.basedir) / "scripts/make_itol_annots",
     shell:
         """
+        if [ "{wildcards.batch}" = "661k_allsamples" ]; then
+            {params.script} \\
+                -i {input.clustercsv} \\
+                -t {input.tree_newick} \\
+                -m {params.661kmetadata} \\
+                -o $(dirname {output.newtree})
+        else
+            {params.script} \\
+                -i {input.clustercsv} \\
+                -t {input.tree_newick} \\
+                -o $(dirname {output.newtree})
+        fi
+        """
+
+rule minimal_cuts:
+    output:
+        fn_mincuts("{batch}", "{genebatch}", "{passinggene}"),
+    input:
+        tree=fn_itoltree("{batch}", "{genebatch}", "{passinggene}"),
+        csv=fn_downsampled_df("{batch}", "{genebatch}", "{passinggene}"),
+    conda:
+        "../envs/ete3.yml"
+    params:
+        script=Path(workflow.basedir) / "scripts/minimal_cuts",
+    shell:
+        """
+        clusterzero=$(dirname {output})/$(basename {output})-cluster0
+        tree=$(dirname {output})/$(basename {output})-tree
+        csvtk filter -f 'Cluster=0' {input.csv} | csvtk cut -f GenomeID \\
+            | sed 1d | csvtk transpose | csvtk csv2tab > $clusterzero
         {params.script} \\
-            -i {params.downsampled_csv} \\
-            -t {input.tree_newick} \\
-            -o $(dirname {output.newtree})
+            {input.tree} \\
+            $clusterzero \\
+            -t $tree \\
+            -o {output} -v
+        rm $tree
         """

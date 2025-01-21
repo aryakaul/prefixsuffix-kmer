@@ -71,7 +71,6 @@ for x in res:
 
     GENEBATCHES_FN.append(batch)
 
-
 assert (
     len(BATCHES_FN) != 0
 ), f"\nERROR: No input genomes provided. Please provide at least one batch in '{dir_input()}/'. Must have the '.txt' extension.\n"
@@ -117,7 +116,7 @@ def aggregate_fastmap_dists(wildcards):
     checkpoint_output = checkpoints.make_bwaidx.get(**wildcards).output[0]
     return expand(
         f"{dir_intermediate()}"
-        + "/fastmap/distances/{batch}/{genebatch}/{genebatch}-{bucket}-distances.tsv",
+        + "/fastmap/distances/{batch}/{genebatch}/{genebatch}-{bucket}-distances.tsv.gz",
         batch=wildcards.batch,
         genebatch=get_gene_batches(),
         bucket=glob_wildcards(os.path.join(checkpoint_output, "{bucket}.bwt")).bucket,
@@ -128,11 +127,15 @@ def aggregate_filter_dists(wildcards):
     checkpoint_output = checkpoints.make_bwaidx.get(**wildcards).output[0]
     return expand(
         f"{dir_intermediate()}"
-        + "/kmerdists/{batch}/{genebatch}/{bucket}-filterdists.csv",
-        batch=get_genome_batches(),
-        genebatch=get_gene_batches(),
+        + "/kmerdists/{batch}/{genebatch}/{bucket}-filterdists.csv.gz",
+        batch=wildcards.batch,
+        genebatch=wildcards.genebatch,
         bucket=glob_wildcards(os.path.join(checkpoint_output, "{bucket}.bwt")).bucket,
     )
+    # batch=get_genome_batches(),
+    # genebatch=get_gene_batches(),
+    # bucket=glob_wildcards(os.path.join(checkpoint_output, "{bucket}.bwt")).bucket,
+    # )
 
 
 def aggregate_filter_distdirs(wildcards):
@@ -147,11 +150,11 @@ def aggregate_filter_distdirs(wildcards):
 def aggregate_passing_genes(wildcards):
     checkpoint_output = checkpoints.cluster_dists.get(**wildcards).output[0]
     x = expand(
-        f"{checkpoint_output}" + "/{passing_genes}_clusters.csv",
+        f"{checkpoint_output}" + "/{passing_genes}_clusters.csv.gz",
         batch=get_genome_batches(),
         genebatch=get_gene_batches(),
         passing_genes=glob_wildcards(
-            os.path.join(checkpoint_output, "{passing_genes}_clusters.csv")
+            os.path.join(checkpoint_output, "{passing_genes}_clusters.csv.gz")
         ).passing_genes,
     )
     return x
@@ -166,24 +169,24 @@ def fn_bwaidxbucket(_batch, _bucket):
 
 
 def fn_fastmapraw(_batch, _bucket, _genebatch):
-    return f"{dir_intermediate()}/fastmap/raw/{_batch}/{_genebatch}/{_genebatch}-{_bucket}-raw.fastmap"
+    return f"{dir_intermediate()}/fastmap/raw/{_batch}/{_genebatch}/{_genebatch}-{_bucket}-raw-fastmap.tsv.gz"
 
 
 def fn_fastmapprocess(_batch, _bucket, _genebatch):
-    return f"{dir_intermediate()}/fastmap/processed/{_batch}/{_genebatch}/{_genebatch}-{_bucket}-processed.fastmap"
+    return f"{dir_intermediate()}/fastmap/processed/{_batch}/{_genebatch}/{_genebatch}-{_bucket}-processed-fastmap.tsv.gz"
 
 
 def fn_fastmapdists(_batch, _bucket, _genebatch):
-    return f"{dir_intermediate()}/fastmap/distances/{_batch}/{_genebatch}/{_genebatch}-{_bucket}-distances.tsv"
+    return f"{dir_intermediate()}/fastmap/distances/{_batch}/{_genebatch}/{_genebatch}-{_bucket}-distances.tsv.gz"
 
 
 def fn_parsedists(_batch, _bucket, _genebatch):
-    return f"{dir_intermediate()}/kmerdists/{_batch}/{_genebatch}/{_bucket}-filterdists.csv"
+    return f"{dir_intermediate()}/kmerdists/{_batch}/{_genebatch}/{_bucket}-filterdists.csv.gz"
 
 
 def fn_downsampled_df(_batch, _genebatch, _passinggene):
-    passing_gene = os.path.basename(_passinggene).split("_clusters.csv")[0]
-    return f"{dir_intermediate()}/downsampled/{_batch}/{_genebatch}/passing_genes/{passing_gene}-downsampled.csv"
+    passing_gene = os.path.basename(_passinggene).split("_clusters.csv.gz")[0]
+    return f"{dir_intermediate()}/downsampled/{_batch}/{_genebatch}/passing_genes/{passing_gene}-downsampled.csv.gz"
 
 
 def fn_listoutputteddfs(passing_file_list):

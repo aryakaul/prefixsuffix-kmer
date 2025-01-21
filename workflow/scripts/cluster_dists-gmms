@@ -1,0 +1,183 @@
+#!/usr/bin/env python
+
+import scipy
+import sys
+import pandas as pd
+import glob
+import os
+import argparse
+from loguru import logger
+from sklearn.cluster import DBSCAN
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.mixture import GaussianMixture
+from sklearn.metrics import silhouette_score
+import numpy as np
+import concurrent.futures
+
+
+# Function to read all CSV files and concatenate them into a single DataFrame
+def aggregate_results(folder_path):
+    all_files = glob.glob(folder_path + "/*.csv")
+    return pd.concat((pd.read_csv(f) for f in all_files), ignore_index=True)
+
+
+# Function to process a single gene
+def process_gene(gene, gene_data, max_clusters_totry):
+    logger.debug(f"Processing gene: {gene}")
+    differences = gene_data["Difference"].values.reshape(-1, 1)
+
+    logger.debug(f"Trying different cluster sizes")
+    n_clusters = np.arange(1, max_clusters_totry)
+    bics = []
+    silhouette_scores = []
+    for n in n_clusters:
+        gmm = GaussianMixture(n_components=n, random_state=0)
+        gmm.fit(differences)
+        labels = gmm.predict(differences)
+        bics.append(gmm.bic(differences))
+        # if n > 1:
+        # silhouette_scores.append(silhouette_score(differences, labels))
+
+    optimal_clusters = n_clusters[np.argmin(bics)]
+    logger.debug(f"Optimal cluster number = {optimal_clusters}")
+    if optimal_clusters == 1: return gene, None, False
+
+    gmm = GaussianMixture(n_components=optimal_clusters,
+                          random_state=0,
+                          covariance_type='spherical')
+    logger.debug(f"Fitting GMM")
+    gmm.fit(differences)
+    logger.debug("Fitting labels")
+    labels = gmm.predict(differences)
+    logger.info(f"{gene} passed filter.")
+    return gene, labels, True
+
+
+# Function to perform clustering and save results
+def cluster_gene_differences_threaded(df, maxmixes, output_dir):
+    # unique_genes = df["GeneID"].unique()
+    grouped_data = df.groupby('GeneID')
+
+    # with concurrent.futures.ThreadPoolExecutor() as executor:
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        futures = {}
+        for gene, gene_data in grouped_data:
+            futures[executor.submit(process_gene, gene, gene_data,
+                                    maxmixes)] = gene
+
+        for future in concurrent.futures.as_completed(futures):
+            gene, labels, is_worthy = future.result()
+
+            if is_worthy:
+                gene_df = df[df["GeneID"] == gene].copy()
+                gene_df["Cluster"] = labels
+
+                # Plotting and saving
+                create_violin_plot(
+                    gene_df, gene,
+                    os.path.join(output_dir, f"{gene}_scatterplot.png"))
+                gene_df.to_csv(os.path.join(output_dir,
+                                            f"{gene}_clusters.csv"),
+                               index=False)
+
+
+# Function to perform clustering and save results
+def cluster_gene_differences(df, epsilon, min_samples, output_dir):
+    unique_genes = df["GeneID"].unique()
+
+    for gene in unique_genes:
+        gene, labels, is_worthy = process_gene(gene, df, epsilon, min_samples)
+
+        if is_worthy:
+            # Use a boolean mask for assignment to avoid setting-with-copy warning
+            mask = df["GeneID"] == gene
+            df.loc[mask, "Cluster"] = labels
+
+            # Creating a copy only for saving and plotting
+            gene_specific_df = df[mask].copy()
+            create_violin_plot(
+                gene_specific_df, gene,
+                os.path.join(output_dir, f"{gene}_scatterplot.svg"))
+            gene_specific_df.to_csv(os.path.join(output_dir,
+                                                 f"{gene}_clusters.csv"),
+                                    index=False)
+
+
+# Function to create violin plots for each gene
+def create_violin_plot(gene_df, gene_id, output_file):
+    plt.figure(figsize=(10, 6))
+    sns.violinplot(x="Cluster",
+                   y="Difference",
+                   data=gene_df.loc[gene_df['Cluster'] != -1],
+                   inner="quartile")
+    plt.title(f"Violin Plot of Differences for Gene: {gene_id}")
+    plt.xlabel("Cluster Assignment")
+    plt.ylabel("Difference")
+    plt.savefig(output_file, dpi=200)
+    plt.close()
+
+
+# Function to plot and save gene clusters
+# def plot_and_save_gene_clusters(df, output_dir):
+# for gene_file in glob.glob(output_dir + "/*_clusters.csv"):
+# gene = os.path.basename(gene_file).split("_")[0]
+# gene_df = df[df["GeneID"] == gene].copy()
+# clusters = pd.read_csv(gene_file, header=None)[1]
+# gene_df["Cluster"] = clusters
+
+# plot_file = os.path.join(output_dir, f"{gene}_scatterplot.png")
+# create_violin_plot(gene_df, gene, plot_file)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Gene clustering script.")
+    parser.add_argument(
+        "-i",
+        "--input_dir",
+        type=str,
+        required=True,
+        help="Directory containing input CSV files.",
+    )
+    parser.add_argument(
+        "-o",
+        "--output_dir",
+        type=str,
+        required=True,
+        help="Directory to store output files.",
+    )
+    parser.add_argument("--maxclusters",
+                        type=int,
+                        default=15,
+                        help="Max number of Gaussian Models to mix.")
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help=
+        "Increase verbosity level. Can be specified multiple times for more detailed logs.",
+    )
+
+    args = parser.parse_args()
+
+    if args.verbose == 0:
+        logger.remove()
+    elif args.verbose == 1:
+        logger.remove()
+        logger.add(sys.stderr, level="INFO")
+    elif args.verbose >= 2:
+        logger.remove()
+        logger.add(sys.stderr, level="DEBUG")
+
+    df = aggregate_results(args.input_dir)
+    logger.info("Read all input files.")
+    clustering_results = cluster_gene_differences_threaded(
+        df, args.maxclusters, args.output_dir)
+    # logger.info("Written clustering results. Plotting differences now.")
+    # plot_and_save_gene_clusters(df, args.output_dir)
+    logger.success("Complete.")
+
+
+if __name__ == "__main__":
+    main()

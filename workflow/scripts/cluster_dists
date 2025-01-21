@@ -2,17 +2,21 @@
 
 import scipy
 import sys
+import matplotlib.ticker as ticker
 import pandas as pd
 import numpy as np
 import re
 import glob
 import os
 import argparse
+import dask.dataframe as dd
 from loguru import logger
-from sklearn.cluster import DBSCAN
+from sklearn.cluster import DBSCAN, OPTICS
+from dbscan1d.core import DBSCAN1D
 import seaborn as sns
 import matplotlib.pyplot as plt
 from matplotlib.collections import PathCollection
+from multiprocessing import Pool
 import concurrent.futures
 
 
@@ -23,16 +27,54 @@ def read_and_filter_csv(file):
     return filtered_df
 
 
-# Function to read all CSV files and concatenate them into a single DataFrame
+def process_file(f):
+    indiv_data = read_and_filter_csv(f)
+    basename_f = os.path.basename(f)
+    bucket_f = re.sub(r"(_\d+)-filterdists\.csv", "", basename_f)
+    indiv_data['Bucket'] = bucket_f
+    logger.debug(f"Read in {bucket_f}")
+    return indiv_data
+
+
+def aggregate_results_dask(folder_path):
+    # Create a glob pattern to match all CSV files in the folder
+    csv_pattern = os.path.join(folder_path, "*.csv")
+
+    # Read all CSV files into a Dask DataFrame
+    df = dd.read_csv(csv_pattern,
+                     assume_missing=True,
+                     include_path_column=True)
+
+    # Extract the base filename from the 'path' column
+    df['Bucket'] = df['path'].map(lambda x: os.path.basename(x),
+                                  meta=('Bucket', 'object'))
+
+    # Use Dask's string methods to extract the 'Bucket' information
+    df['Bucket'] = df['Bucket'].str.replace(r"(_\d+)-filterdists\.csv$",
+                                            "",
+                                            regex=True)
+
+    # Optionally drop the 'path' column if it's no longer needed
+    df = df.drop(columns=['path'])
+
+    # Filter out columns that are entirely NA
+    # df = df.dropna(axis=1, how='all')
+
+    # Compute the Dask DataFrame to get a pandas DataFrame
+    df = df.compute()
+
+    return df
+
+
 def aggregate_results(folder_path):
-    all_files = glob.glob(folder_path + "/*.csv")
-    df = pd.DataFrame()
-    for f in all_files:
-        indiv_data = read_and_filter_csv(f)
-        basename_f = os.path.basename(f)
-        bucket_f = re.sub(r"(_\d+)-filterdists\.csv", "", basename_f)
-        indiv_data['Bucket'] = bucket_f
-        df = pd.concat((df, indiv_data), ignore_index=True)
+    all_files = glob.glob(os.path.join(folder_path, "*.csv"))
+
+    # Use a multiprocessing Pool to process files in parallel
+    with Pool() as pool:
+        dataframes = pool.map(process_file, all_files)
+
+    # Concatenate all DataFrames at once
+    df = pd.concat(dataframes, ignore_index=True)
     return df
 
 
@@ -74,7 +116,12 @@ def assign_cluster_colors(labels):
 
 
 # Function to process a single gene
-def process_gene(gene, gene_data, epsilon, min_samples, output_dir):
+def process_gene(gene,
+                 gene_data,
+                 epsilon,
+                 min_samples,
+                 output_dir,
+                 remove_outliers=False):
     logger.debug(f"Processing gene: {gene}")
     gene_name = gene
     if '/' in gene_name:
@@ -86,39 +133,58 @@ def process_gene(gene, gene_data, epsilon, min_samples, output_dir):
         gene_name = gene_name.replace('|', ':')
         logger.warning(f"{gene_name} replaces {gene}")
     if '(' in gene_name:
-        logger.warning(f"{gene_name} contains '(', deleting '('")
-        gene_name = gene_name.replace('(', '')
+        logger.warning(f"{gene_name} contains '(', replacing with ':'")
+        gene_name = gene_name.replace('(', ':')
         logger.warning(f"{gene_name} replaces {gene}")
     if ')' in gene_name:
-        logger.warning(f"{gene_name} contains ')', deleting ')'")
-        gene_name = gene_name.replace(')', '')
+        logger.warning(f"{gene_name} contains ')', replacing with ':'")
+        gene_name = gene_name.replace(')', ':')
         logger.warning(f"{gene_name} replaces {gene}")
     if "'" in gene_name:
-        logger.warning(f"{gene_name} contains \"'\", deleting \"'\"")
-        gene_name = gene_name.replace("'", "")
+        logger.warning(f"{gene_name} contains \"'\", replacting with ':'")
+        gene_name = gene_name.replace("'", ":")
 
     # Count the occurrences of each unique value for sample_weight
     value_counts = gene_data["Difference"].value_counts()
-
     # Remove exact duplicates
     gene_data_unique = gene_data.drop_duplicates(subset=["Difference"])
-
     # Reshape for DBSCAN
     differences = gene_data_unique["Difference"].values.reshape(-1, 1)
 
-    create_violin_plot(
+    # for OPTICS
+    # differences = gene_data['Difference'].values.reshape(-1, 1)
+
+    create_plot(
         gene_data, gene_name,
-        os.path.join(output_dir, "all_differencedist_plots",
-                     f"{gene_name}_dist.png"))
+        os.path.join(output_dir, "all_gene_dists",
+                     f"{gene_name}_distances.png"))
+
+    # logger.debug(differences.shape)
+    # if min_samples > differences.shape[0]:
+    # logger.warning(f"Min. samples ({min_samples}) greater than number of samples ({differences.shape})... Skipping {gene_name}")
+    # return gene, None, False, None
+
+    # create_violin_plot(
+    # gene_data, gene_name,
+    # os.path.join(output_dir, "all_differencedist_plots",
+    # f"{gene_name}_dist.png"))
 
     logger.debug(f"Clustering differences")
-    dbscan = DBSCAN(eps=epsilon, min_samples=min_samples, n_jobs=-1)
+    # dbscan = DBSCAN(eps=epsilon, min_samples=min_samples, n_jobs=4)
+    dbscan = DBSCAN1D(eps=epsilon, min_samples=min_samples)
+    # optics = OPTICS(max_eps=epsilon,
+    # cluster_method='dbscan',
+    # min_samples=min_samples,
+    # xi=0.3,
+    # n_jobs=-1,
+    # metric='manhattan')
 
     logger.debug(f"Fitting labels")
 
     # Use sample_weight in DBSCAN
     sample_weight = value_counts.loc[gene_data_unique["Difference"]].values
     labels = dbscan.fit_predict(differences, sample_weight=sample_weight)
+    # labels = optics.fit_predict(differences)
 
     logger.debug(f"Checking gene labels")
 
@@ -144,25 +210,31 @@ def process_gene(gene, gene_data, epsilon, min_samples, output_dir):
         old_label: new_label
         for new_label, old_label in enumerate(sorted_clusters)
     }
+    # print(cluster_mapping)
 
     # Replace old labels with new labels
     new_labels = np.array(
         [cluster_mapping[label] if label != -1 else -1 for label in labels])
+    # print(new_labels)
 
     # Create a mapping from unique values to labels
     mapping = dict(zip(gene_data_unique["Difference"], new_labels))
+    # mapping = dict(zip(gene_data['Difference'], new_labels))
+    # print(mapping)
 
     gene_df = gene_data.copy()
     gene_df["Cluster"] = gene_df['Difference'].map(mapping)
+    # print(pd.unique(gene_df['Cluster']))
     outdir = os.path.join(output_dir, "passing_genes", gene_name)
     os.makedirs(outdir, exist_ok=True)
 
     # Plotting and saving
-    create_violin_plot_ofclusters(
-        gene_df, gene_name, os.path.join(outdir,
-                                         f"{gene_name}_coloreddist.png"))
-    create_kde_plot(gene_df, gene_name,
-                    os.path.join(outdir, f"{gene_name}_kde.png"))
+    if remove_outliers:
+        create_plot(gene_df.loc[gene_df['Cluster'] != -1], gene_name,
+                    os.path.join(outdir, f"{gene_name}_clusters.png"))
+    else:
+        create_plot(gene_df, gene_name,
+                    os.path.join(outdir, f"{gene_name}_clusters.png"))
     gene_df.to_csv(os.path.join(outdir, f"{gene_name}_clusters.csv"),
                    index=False)
 
@@ -170,7 +242,11 @@ def process_gene(gene, gene_data, epsilon, min_samples, output_dir):
 
 
 # Function to perform clustering and save results
-def cluster_gene_differences_threaded(df, epsilon, min_samples, output_dir):
+def cluster_gene_differences_threaded(df, epsilon, min_samples, output_dir,
+                                      remove_outliers):
+    if len(df) == 0:
+        return 0, 0
+
     grouped_data = df.groupby('GeneID')
 
     num_failing_genes = 0
@@ -179,7 +255,8 @@ def cluster_gene_differences_threaded(df, epsilon, min_samples, output_dir):
         futures = {}
         for gene, gene_data in grouped_data:
             futures[executor.submit(process_gene, gene, gene_data, epsilon,
-                                    min_samples, output_dir)] = gene
+                                    min_samples, output_dir,
+                                    remove_outliers)] = gene
 
         for future in concurrent.futures.as_completed(futures):
             gene, mapping, is_worthy, gene_name = future.result()
@@ -191,109 +268,93 @@ def cluster_gene_differences_threaded(df, epsilon, min_samples, output_dir):
     return num_passing_genes, num_failing_genes
 
 
-# Function to plot difference distribution for a gene
-def create_violin_plot(gene_df, gene_id, output_file):
-    plt.figure(figsize=(10, 6))
+def create_plot(big_df, gene_id, output):
+    big_df = big_df.copy()
+    if 'Cluster' in big_df.columns:
+        # print(pd.unique(big_df['Cluster']))
+        # print(big_df['Cluster'].isnull().sum())
+        palette_ints = assign_cluster_colors(big_df['Cluster'].astype(int))
+        # print(palette_ints)
+        big_df['Cluster'] = big_df['Cluster'].astype(str)
+        # print(big_df['Cluster'])
+        palette = {}
+        for i in palette_ints:
+            palette[str(i)] = palette_ints[i]
+    # Create a figure with two subplots (rows), sharing the same x-axis
+    fig, axs = plt.subplots(2,
+                            1,
+                            figsize=(5, 4),
+                            sharex=True,
+                            gridspec_kw={'height_ratios': [3, 1]})
 
-    ax = sns.stripplot(
-        x='Difference',
-        data=gene_df,
-        jitter=0.35,
-        color='grey',
-        orient="h",
-        alpha=0.8
-    )
+    # First plot (KDE) on the first subplot
+    sns.histplot(data=big_df,
+                 x="Difference",
+                 ax=axs[0],
+                 fill=False,
+                 color='black')
+    axs[0].set_ylabel("Number of Genomes")
+    axs[0].set_title(f"{gene_id}")
+    # Remove x-axis label for the top plot to only have it at the bottom plot
+    axs[0].set_xlabel("")
+    axs[0].yaxis.set_major_formatter(
+        ticker.FuncFormatter(lambda x, pos: '{:,.0f}'.format(x)
+                             if x == 0 else '{:,.3g}'.format(x / 1000) + 'K'))
 
-    sns.violinplot(
-        x='Difference',
-        data=gene_df,
-        fill=False,
-        inner=None,
-        cut=0,
-        color='black',
-        split=False,
-        bw_method=0.02,
-    )
-    plt.ylabel("Density")
-    plt.xlabel("Distance Difference compared to gene (bp)")
-    plt.title(f"Gene: {gene_id}")
-    sns.despine(left=True)
-    plt.savefig(output_file, dpi=200)
-    plt.close()
+    if 'Cluster' in big_df.columns:
+        # Second plot (Stripplot and Violinplot) on the second subplot
+        sns.stripplot(x='Difference',
+                      data=big_df.sort_values(
+                          'Cluster', key=lambda x: x.replace('-1', 'A')),
+                      hue='Cluster',
+                      orient="h",
+                      ax=axs[1],
+                      alpha=0.8,
+                      palette=palette)
+    else:
+        sns.stripplot(
+            x='Difference',
+            data=big_df,
+            color='black',
+            orient="h",
+            ax=axs[1],
+            alpha=0.8,
+        )
 
-def fulldist_colorclusters(gene_df, gene_id, output_file):
-    plt.figure(figsize=(10, 6))
+    sns.violinplot(x='Difference',
+                   data=big_df,
+                   fill=True,
+                   inner=None,
+                   cut=0,
+                   color='lightgrey',
+                   alpha=0.8,
+                   split=False,
+                   ax=axs[1])
 
-    ax = sns.violinplot(x="Difference",
-                        data=gene_df,
-                        fill=False,
-                        color="black",
-                        bw_method=0.02,
-                        inner=None)
-    for artist in ax.lines:
-        artist.set_zorder(10)
-    for artist in ax.findobj(PathCollection):
-        artist.set_zorder(11)
+    if "Cluster" in big_df.columns:
+        handles, labels = axs[1].get_legend_handles_labels()
+        fig.legend(handles,
+                   labels,
+                   title="Cluster",
+                   bbox_transform=fig.transFigure)
+        axs[1].get_legend().remove()
 
-    palette = assign_cluster_colors(gene_df['Cluster'])
-
-    sns.stripplot(x="Difference",
-                  hue='Cluster',
-                  data=gene_df,
-                  jitter=0.35,
-                  ax=ax,
-                  orient="h",
-                  alpha=0.8,
-                  zorder=1,
-                  palette = palette)
-
-    plt.title(f"Gene: {gene_id}")
-    plt.xlabel("Difference (bp)")
+    # Set labels for the second plot
+    axs[1].set_xlabel("Prefix-suffix distance relative to gene length")
+    axs[1].xaxis.set_major_formatter(
+        ticker.FuncFormatter(lambda x, pos: '{:,.0f}'.format(x)
+                             if x == 0 else '{:,.3g}'.format(x / 1000) + 'kb'))
+    axs[1].set(ylabel=None)  # Remove y-axis label
+    axs[1].set_yticks([])
     sns.despine()
-    plt.savefig(output_file, dpi=200, bbox_inches='tight')
+    sns.despine(left=True, ax=axs[1])
+
+    # Adjust layout to not overlap and save the figure
+    plt.tight_layout()
+
+    plt.savefig(output, dpi=300, transparent=True)
     plt.close()
 
-
-# Function to create violin plots for each gene
-def create_violin_plot_ofclusters(gene_df, gene_id, output_file):
-    plt.figure(figsize=(10, 6))
-
-    ax = sns.violinplot(
-        x='Difference',
-        data=gene_df,
-        fill=False,
-        inner=None,
-        cut=0,
-        color='black',
-        split=False,
-        bw_method=0.02,
-    )
-
-    palette = assign_cluster_colors(gene_df['Cluster'])
-
-    sns.stripplot(x='Difference',
-                  hue='Cluster',
-                  data=gene_df,
-                  jitter=0.35,
-                  orient="h",
-                  ax=ax,
-                  palette=palette)
-
-    plt.ylabel("Density")
-    plt.xlabel("Distance Difference compared to gene (bp)")
-    plt.title(f"Gene: {gene_id}")
-    sns.despine(left=True)
-    plt.savefig(output_file, dpi=200, bbox_inches='tight')
-    plt.close()
-
-
-def create_kde_plot(gene_df, gene_id, output_file):
-    ax = sns.kdeplot(data=gene_df, x="Difference", color='black')
-    sns.despine()
-    plt.ylabel("Density")
-    plt.xlabel("Distance Difference compared to gene (bp)")
-    plt.title(f"Gene: {gene_id}")
-    plt.savefig(output_file, dpi=200, bbox_inches='tight')
 
 def main():
     parser = argparse.ArgumentParser(description="Gene clustering script.")
@@ -314,11 +375,14 @@ def main():
     parser.add_argument("--epsilon",
                         type=float,
                         default=800,
-                        help="Epsilon value for DBSCAN.")
+                        help="Epsilon value for OPTICS.")
     parser.add_argument("--min_samples",
                         type=int,
-                        default=20,
-                        help="Minimum samples value for DBSCAN.")
+                        default=75,
+                        help="Minimum samples value for OPTICS.")
+    parser.add_argument("--remove_outliers",
+                        action="store_true",
+                        help="Whether to remove or keep outliers in plots.")
     parser.add_argument(
         "-v",
         "--verbose",
@@ -339,17 +403,24 @@ def main():
         logger.remove()
         logger.add(sys.stderr, level="DEBUG")
 
-    os.makedirs(os.path.join(args.output_dir, "all_differencedist_plots"),
-                exist_ok=True)
+    os.makedirs(os.path.join(args.output_dir, "all_gene_dists"), exist_ok=True)
     passinggenesdir = os.path.join(args.output_dir, "passing_genes")
     os.makedirs(passinggenesdir, exist_ok=True)
-    df = aggregate_results(args.input_dir)
+    logger.debug("Aggregating inputs")
+    # df = aggregate_results(args.input_dir)
+    df = aggregate_results_dask(args.input_dir)
+    logger.info("Read all input files.")
+    # print(df)
     logger.info("Read all input files.")
     (num_passing_genes, num_failing_genes) = cluster_gene_differences_threaded(
-        df, args.epsilon, args.min_samples, args.output_dir)
-    logger.info(
-        f"Passing genes: {num_passing_genes} ({(num_passing_genes/(num_passing_genes+num_failing_genes))*100}%)\nFailing genes: {num_failing_genes} ({(num_failing_genes/(num_passing_genes+num_failing_genes))*100}%)"
-    )
+        df, args.epsilon, args.min_samples, args.output_dir,
+        args.remove_outliers)
+    if num_passing_genes + num_failing_genes == 0:
+        logger.info("No genes passed filters.")
+    else:
+        logger.info(
+            f"Passing genes: {num_passing_genes} ({(num_passing_genes/(num_passing_genes+num_failing_genes))*100}%)\nFailing genes: {num_failing_genes} ({(num_failing_genes/(num_passing_genes+num_failing_genes))*100}%)"
+        )
     logger.success("Complete.")
 
 

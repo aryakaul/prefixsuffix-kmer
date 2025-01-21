@@ -1,0 +1,28 @@
+default-resources:
+  - slurm_account=baym
+  - slurm_partition=short
+  - runtime="5h"
+  - mem="4gb"
+
+
+jobs: 500
+restart-times: 0
+max-jobs-per-second: 100
+cores: 14
+  
+rerun-incomplete: True
+printshellcmds: True
+
+groups:
+  - prefixsuffix_kmergen=kmergengroup
+  - fastmap=fastmapgroup
+  - fastmap_process=fastmapprocessgroup  
+  - fastmap_distances=fastmapdistances-group
+  - parse_distances=fastmapparsedistances-group
+
+group-components:
+  - kmergengroup=100
+  - fastmapgroup=800
+  - fastmapprocessgroup=400
+  - fastmapdistances-group=50
+  - fastmapparsedistances-group=200
