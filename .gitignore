@@ -8,3 +8,5 @@ intermediate/
 output/
 manual/
 snakemake.*
+.test/intermediate/
+.test/output/
