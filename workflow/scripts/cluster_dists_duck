@@ -40,8 +40,7 @@ def process_gene(args):
         # No data for this gene
         return gene_id, None, False, None
 
-    df['Bucket'] = df['filename'].apply(
-        lambda x: re.sub(r"(_\d+)-filterdists\.csv", "", os.path.basename(x)))
+    df['Bucket'] = df['filename'].apply(lambda x: re.sub(r'-filterdists\.csv\.gz$', '', os.path.basename(x)))
 
     # Clean gene_name for file system usage
     gene_name = gene_id.replace("/", ":").replace("|", ":").replace(
@@ -314,7 +313,9 @@ def main():
 
     # Generate a unique temporary database file
     unique_id = str(uuid.uuid4())
-    temp_db_file = os.path.join(tempfile.gettempdir(),
+    # temp_db_file = os.path.join(tempfile.gettempdir(),
+    # f'gene_data_{unique_id}.duckdb')
+    temp_db_file = os.path.join(args.output_dir,
                                 f'gene_data_{unique_id}.duckdb')
 
     con = duckdb.connect(database=temp_db_file, read_only=False)
@@ -329,10 +330,10 @@ def main():
         'PrefixContig': 'VARCHAR',
         'SuffixContig': 'VARCHAR',
         'Contig': 'VARCHAR',
-        'Distance': 'INTEGER',
+        'Distance': 'BIGINT',
         'Difference': 'DOUBLE',
-        'PrefixLocation': 'INTEGER',
-        'SuffixLocation': 'INTEGER'
+        'PrefixLocation': 'BIGINT',
+        'SuffixLocation': 'BIGINT'
     }
 
     # Read the CSV files into a relation

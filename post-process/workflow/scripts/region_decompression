@@ -222,6 +222,8 @@ def main():
             bucket_name = os.path.basename(line.strip()).split(".tar.xz")[0]
             file_mapping[bucket_name] = str(line.strip())
 
+    # df['Bucket'] = df['filename'].str.extract(r'^(.*)_.*-filterdists\.csv\.gz$', expand=False)
+    df['Bucket'] = df['filename'].str.extract(r'.*/(.*)_.*-filterdists\.csv\.gz$', expand=False)
     grouped = df.groupby("Bucket")
     with multiprocessing.Pool() as pool:
         pool.map(

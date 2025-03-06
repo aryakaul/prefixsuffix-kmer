@@ -2,179 +2,244 @@
 
 import sys
 import argparse
-from loguru import logger
-import pandas as pd
+import os
 import numpy as np
+import pandas as pd
+from loguru import logger
+import gzip
+import shutil
+from pathlib import Path
 from multiprocessing import Pool
 
-
 def calculate_distances(group, k, g):
-    group.dropna(inplace=True)
+    """
+    Calculate distances between prefix and suffix k-mers in a given group
+    using a merge-based approach. This keeps duplicates, enumerating every
+    prefix-suffix pair.
+    """
 
-    # Attempting to correct SettingWithCopyWarning by avoiding chained assignment
-    # group = group.copy()
+    # If this group is empty, return an empty DataFrame
+    if group.empty:
+        return pd.DataFrame()
 
-    # Determine k-mer types and gene length, handling mixed types
-    group['KmerType'] = group['kmerID'].apply(lambda x: 'prefix'
-                                              if 'prefix' in x else 'suffix')
-    group['length'] = group['GeneID'].str.split("-").str[-1].str.replace(
-        'len', '').astype(int)
+    # Split group into prefix & suffix
+    prefixes = group[group["KmerType"] == "prefix"].copy()
+    suffixes = group[group["KmerType"] == "suffix"].copy()
+    logger.debug(f"Prefixes shape: {prefixes.shape}")
+    logger.debug(f"Suffixes shape: {suffixes.shape}")
 
-    group = group.convert_dtypes()
-    group['length'] = pd.to_numeric(group['length'], downcast='unsigned')
-    group['Location'] = pd.to_numeric(group['Location'], downcast='integer')
-    prefixes = group[group['KmerType'] == 'prefix'].copy()
-    suffixes = group[group['KmerType'] == 'suffix'].copy()
+    if prefixes.shape[0] > 10000 or suffixes.shape[0] > 10000:
+        logger.warning(f"More than 10,000 prefix or suffix matches. Likely MGE! Skipping. Prefix matches: {prefixes.shape[0]} Suffix matches: {suffixes.shape[0]}")
+        return pd.DataFrame()
 
-    # print(prefixes.info(memory_usage='deep'))
-    # print(suffixes.info(memory_usage='deep'))
-    try:
-        combined_df = pd.merge(prefixes,
-                               suffixes,
-                               on=['genomeID'],
-                               how='outer',
-                               suffixes=('_prefix', '_suffix'))
-    except MemoryError:
-        logger.error("Ran out of memory. Skipping.")
-        return
+    # Merge on ["genomeID","length"]. 'outer' to keep all possible combos
+    merged = pd.merge(
+        prefixes,
+        suffixes,
+        on=["genomeID", "length"],
+        how="outer",
+        suffixes=("_prefix", "_suffix"),
+        sort=False
+    )
 
-    combined_df.fillna(
-        {
-            'Contig_prefix': 'None',
-            'Contig_suffix': 'None',
-            'Location_prefix': np.nan,
-            'Location_suffix': np.nan
-        },
-        inplace=True)
+    # Fill missing contigs with placeholders
+    merged["Contig_prefix"] = merged["Contig_prefix"].fillna("None")
+    merged["Contig_suffix"] = merged["Contig_suffix"].fillna("None")
 
-    logger.debug("Performed merge of prefixes and suffixes")
+    # Distance calculation
+    prefix_missing = merged["Location_prefix"].isna()
+    suffix_missing = merged["Location_suffix"].isna()
 
-    def apply_conditions(row):
-        if pd.isna(row['Location_prefix']) or pd.isna(row['Location_suffix']):
-            return 'PrefixMissing' if pd.isna(
-                row['Location_prefix']) else 'SuffixMissing'
-        elif row['Contig_prefix'] != row['Contig_suffix']:
-            return 'ContigsDifferent'
-        else:
-            return abs(
-                abs(row['Location_suffix']) -
-                abs(row['Location_prefix'])) + k + 2 * g
+    merged["distance"] = np.nan
+    merged["distance"] = merged["distance"].astype(object)
 
-    combined_df['distance'] = combined_df.apply(apply_conditions, axis=1)
-    logger.debug("Applied conditions for distance calculation")
+    merged.loc[prefix_missing, "distance"] = "PrefixMissing"
+    merged.loc[suffix_missing, "distance"] = "SuffixMissing"
 
-    # Assuming 'Distance' is calculated and available in 'combined_df'
-    # Now calculate 'Difference' where applicable
-    combined_df['Difference'] = np.nan  # Initialize with NaN
+    has_both = (~prefix_missing) & (~suffix_missing)
+    same_contig = has_both & (merged["Contig_prefix"] == merged["Contig_suffix"])
+    merged.loc[same_contig, "distance"] = (
+        (
+            merged.loc[same_contig, "Location_suffix"].abs()
+            - merged.loc[same_contig, "Location_prefix"].abs()
+        ).abs()
+        + k
+        + 2*g
+    )
+    different_contig = has_both & (merged["Contig_prefix"] != merged["Contig_suffix"])
+    merged.loc[different_contig, "distance"] = "ContigsDifferent"
 
-    # Calculate 'Difference' only for numeric distances
-    mask = combined_df['distance'].apply(lambda x: isinstance(x, (int, float)))
-    if mask.any():
-        # Perform the calculation only if there are matching rows
-        combined_df.loc[mask, 'Difference'] = (
-            combined_df.loc[mask, 'distance'] -
-            combined_df.loc[mask, 'length_prefix']).astype(float)
-    else:
-        # If no rows match the condition, explicitly set 'Difference' to NaN for clarity, although this may be redundant
-        combined_df['Difference'] = np.nan
-    # combined_df.loc[mask, 'Difference'] = combined_df.loc[
-    # mask, 'distance'] - combined_df.loc[mask, 'length_prefix']
+    # Compute "Difference" for numeric distances
+    numeric_mask = pd.to_numeric(merged["distance"], errors="coerce").notna()
+    merged.loc[numeric_mask, "Difference"] = (
+        merged.loc[numeric_mask, "distance"].astype(float)
+        - merged.loc[numeric_mask, "length"]
+    )
 
-    logger.debug("Calculated 'Difference'")
-    combined_df['GeneID'] = combined_df['GeneID_prefix'].combine_first(
-        combined_df['GeneID_suffix'])
-    combined_df['Contig'] = combined_df['Contig_prefix'].combine_first(
-        combined_df['Contig_suffix'])
+    # If the group has only one GeneID, pick from either side
+    merged["GeneID"] = merged["GeneID_prefix"].combine_first(merged["GeneID_suffix"])
 
-    # Final adjustments and returning result
-    result = combined_df[[
-        'genomeID', 'GeneID', 'kmerID_prefix', 'kmerID_suffix',
-        'Contig_prefix', 'Contig_suffix', 'Contig', 'distance', 'Difference',
-        'Location_prefix', 'Location_suffix'
-    ]]
-    logger.debug("Prepared the final result DataFrame")
+    # Final DataFrame with consistent columns, built in one pass
+    result = pd.DataFrame({
+        "GenomeID": merged["genomeID"],
+        "GeneID": merged["GeneID"],
+        "PrefixID": merged["kmerID_prefix"],
+        "SuffixID": merged["kmerID_suffix"],
+        "PrefixContig": merged["Contig_prefix"],
+        "SuffixContig": merged["Contig_suffix"],
+        "Contig": merged["Contig_prefix"].combine_first(merged["Contig_suffix"]),
+        "Distance": merged["distance"],
+        "Difference": merged["Difference"],
+        "PrefixLocation": merged["Location_prefix"],
+        "SuffixLocation": merged["Location_suffix"],
+    })
 
     return result
 
 
-# Wrapper function for multiprocessing
 def process_group_wrapper(args):
-    name, group, k, g = args
-    logger.info(f"Processing {name}")
+    """
+    Multiprocessing wrapper for handling each group.
+    """
+    (name, group, k, g) = args
+    logger.info(f"Processing group: {name}")
     return calculate_distances(group, k, g)
 
+def gzip_file_in_place(file_path):
+    """
+    Gzip a file in-place where file_path already has .gz extension.
+    
+    Args:
+        file_path: Path to the file you want to compress (e.g., "output.tsv.gz")
+    """
+    # Create temporary name for the uncompressed file
+    base_path = file_path.removesuffix('.gz')
+    
+    # Rename the original uncompressed file to remove .gz extension
+    os.rename(file_path, base_path)
+    
+    # Compress the file
+    with open(base_path, 'rb') as f_in:
+        with gzip.open(file_path, 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)
+    
+    # Remove the uncompressed file
+    os.remove(base_path)
+    logger.info(f"Successfully compressed {base_path} to {file_path}")
+
+# Example usage:
+# gzip_file_in_place("output.tsv.gz")
 
 def main():
     parser = argparse.ArgumentParser(
-        description=
-        "Extract k-mer sequences from a genome based on a provided locus tag and TSV file."
+        description="Compute prefix-suffix k-mer distances via merging, writing results incrementally."
     )
-    parser.add_argument("-i",
-                        "--input",
-                        required=True,
-                        help="Input processed bwa fastmap output",
-                        metavar="FILE")
-    parser.add_argument("-o",
-                        "--output",
-                        required=True,
-                        help="Output distance dataframe for mappings",
-                        metavar="FILE")
-    parser.add_argument("-k",
-                        "--kmer-length",
-                        type=int,
-                        required=True,
-                        help="Kmer Length")
-    parser.add_argument("-g",
-                        "--gap-distance",
-                        type=int,
-                        required=True,
-                        help="Gap distance")
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        action="count",
-        default=0,
-        help=
-        "Increase verbosity level. Can be specified multiple times for more detailed logs."
-    )
+    parser.add_argument("-i", "--input", required=True,
+                        help="Input BWA FastMap TSV/CSV (gzipped ok).")
+    parser.add_argument("-o", "--output", required=True,
+                        help="Output TSV for distance data.")
+    parser.add_argument("-g", "--gap-distance", type=int, required=True,
+                        help="Gap distance G.")
+    parser.add_argument("-k", "--kmer-length", type=int, required=True,
+                        help="K-mer length.")
+    parser.add_argument("-t", "--threads", type=int, default=1,
+                        help="Number of worker processes.")
+    parser.add_argument("-v", "--verbose", action="count", default=0,
+                        help="Increase verbosity (-v, -vv, etc.).")
     args = parser.parse_args()
 
+    # Configure logging
+    logger.remove()  # remove default handler
     if args.verbose == 0:
-        logger.remove()
+        pass  # no logs
     elif args.verbose == 1:
-        logger.remove()
         logger.add(sys.stderr, level="INFO")
-    elif args.verbose >= 2:
-        logger.remove()
+    else:  # >= 2
         logger.add(sys.stderr, level="DEBUG")
 
-    # dtype_spec = {'Contig': 'str', 'KmerType': 'str', 'GeneID': 'str', 'Location': 'int32'}
-    # df = pd.read_csv(args.input, sep="\t")
-    df = pd.read_csv(args.input, sep="\t", na_values='Null')
-    pattern = r'(.+?-len\d+)(_.+)$'
-    df[['GeneID', 'KmerType']] = df['kmerID'].str.extract(pattern)
+    # Ensure output directory exists
+    Path(os.path.dirname(args.output)).mkdir(parents=True, exist_ok=True)
 
-    # Parallel processing setup
-    pool = Pool()
-    groups = [(name, group, args.kmer_length, args.gap_distance)
-              for name, group in df.groupby("GeneID")]
-    results = pool.map(process_group_wrapper, groups)
-    pool.close()
-    pool.join()
+    # Narrow reading: usecols, dtype
+    dtype_spec = {
+        "genomeID": "string",
+        "kmerID": "string",
+        "Contig": "string",
+        "Location": "Int64"
+    }
+    usecols = ["genomeID", "kmerID", "Contig", "Location"]
+    df = pd.read_csv(
+        args.input,
+        sep="\t",
+        dtype=dtype_spec,
+        na_values=["Null", "None"],
+        usecols=usecols
+    )
+    logger.debug("Input TSV read successfully.")
 
-    # Concatenate all result DataFrames
-    final_result = pd.concat(results, ignore_index=True)
+    # Precompute columns: GeneID, KmerType, length
+    df["GeneID"] = df["kmerID"].str.extract(r"(.+?-len\d+)", expand=False)
+    df["KmerType"] = np.where(df["kmerID"].str.contains("prefix"), "prefix", "suffix")
+    df["length"] = (
+        df["GeneID"]
+        .str.split("-")
+        .str[-1]
+        .str.replace("len", "", regex=False)
+        .astype("Int64")
+    )
 
-    # Writing results to file
-    final_result.to_csv(args.output,
-                        sep='\t',
-                        index=False,
-                        header=[
-                            "GenomeID", "GeneID", "PrefixID", "SuffixID",
-                            "PrefixContig", "SuffixContig", "Contig",
-                            "Distance", "Difference", "PrefixLocation",
-                            "SuffixLocation"
-                        ])
+    # Drop rows missing essential fields
+    df.dropna(subset=["kmerID", "GeneID", "Location"], inplace=True)
+    logger.debug("Computed GeneID, KmerType, length; dropped invalid rows if any.")
+
+    # Group by GeneID
+    # (If extremely large # of groups, consider chunking or partial grouping)
+    grouped = df.groupby("GeneID", sort=False)
+    group_args = [(name, grp, args.kmer_length, args.gap_distance)
+                  for name, grp in grouped]
+
+    logger.debug(f"DataFrame grouped by GeneID into {len(group_args)} groups.")
+
+    # We'll write partial results incrementally, no final big concat
+    out_cols = [
+        "GenomeID",
+        "GeneID",
+        "PrefixID",
+        "SuffixID",
+        "PrefixContig",
+        "SuffixContig",
+        "Contig",
+        "Distance",
+        "Difference",
+        "PrefixLocation",
+        "SuffixLocation",
+    ]
+
+    # Open the output file once, handle header logic
+    first_chunk = True
+    with Pool(processes=args.threads) as pool, \
+            open(args.output, "w", encoding="utf-8") as out_f:
+
+        # Using imap for incremental results
+        for i, result_df in enumerate(pool.imap(process_group_wrapper, group_args, chunksize=50)):
+            if result_df.empty:
+                continue  # skip entirely empty results
+
+            if first_chunk:
+                # Write header once
+                result_df.to_csv(out_f, sep="\t", index=False, columns=out_cols)
+                first_chunk = False
+            else:
+                # Append without header
+                result_df.to_csv(out_f, sep="\t", index=False, columns=out_cols, header=False)
+
+
+    if args.output.endswith('.gz'):
+        logger.info(f"Compressing output file: {args.output}")
+        gzip_file_in_place(args.output)
+        logger.info(f"Compression complete")
+
+    logger.info(f"Results written incrementally to {args.output}")
 
 
 if __name__ == "__main__":

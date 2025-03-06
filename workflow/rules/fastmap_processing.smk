@@ -40,14 +40,15 @@ rule fastmap_distances:
         kmer_length=config["kmer_length"],
         gap_distance=config["gap_distance"],
     resources:
-        mem_gb=200,
+        mem_gb=10,
     shell:
         """
         {params.script} \\
         -i {input} \\
         -o {output} \\
         -k {params.kmer_length} \\
-        -g {params.gap_distance}
+        -g {params.gap_distance} \\
+        -vvv
         """
 
 

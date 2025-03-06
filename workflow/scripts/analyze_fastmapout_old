@@ -1,92 +1,192 @@
 #!/usr/bin/env python3
 
 import sys
-import os
 import argparse
 from loguru import logger
 import pandas as pd
+import os
+import numpy as np
+from multiprocessing import Pool
+from pathlib import Path
 
 
-# Function to write distances for each gene to a file
-def write_distances(group, file, k, g):
-    prefix_df = group[group["KmerType"].str.contains("prefix")]
-    suffix_df = group[group["KmerType"].str.contains("suffix")]
+def calculate_distances(group, k, g):
+    logger.debug(f"Analyzing {group['GeneID']}")
 
-    for _, prefix_row in prefix_df.iterrows():
-        for _, suffix_row in suffix_df.iterrows():
-            prefix_loc = prefix_row['Location']
-            suffix_loc = suffix_row['Location']
-            if prefix_row["Contig"] == suffix_row["Contig"] and prefix_row[
-                    'Contig'] != "Null":
-                distance = abs(
-                    abs(int(suffix_row["Location"])) -
-                    abs(int(prefix_row["Location"]))) + k + 2 * g
-                length = int(prefix_row['GeneID'].split("-")[-1][3:])
-                difference = distance - length
-            else:
-                if prefix_row['Contig'] != suffix_row['Contig']:
-                    distance = "ContigsDifferent"
-                if prefix_row['Contig'] == "Null" or suffix_row[
-                        'Contig'] == "Null":
-                    distance = "KmerNotFound"
-                difference = "NaN"
-            file.write(
-                f"{prefix_row['GeneID']}\t{prefix_row['kmerID']}\t{suffix_row['kmerID']}\t{prefix_row['Contig']}\t{distance}\t{difference}\t{prefix_loc}\t{suffix_loc}\n"
-            )
+    # Drop rows missing essential values to avoid issues later
+    group.dropna(subset=["kmerID", "GeneID", "Location"], inplace=True)
+
+    # If not already computed in main, derive KmerType and gene length
+    # if "KmerType" not in group.columns:
+        # logger.debug(f"1a")
+        # group["KmerType"] = np.where(
+            # group["kmerID"].str.contains("prefix"), "prefix", "suffix"
+        # )
+        # logger.debug(f"1b")
+    # if "length" not in group.columns:
+        # group["length"] = (
+            # group["GeneID"].str.split("-").str[-1].str.replace("len", "").astype(float)
+        # )
+
+
+    # group["Location"] = pd.to_numeric(group["Location"], errors="raise")
+
+    logger.debug(f"KmerType: {group['KmerType']}")
+    logger.debug(f"length: {group['length']}")
+    logger.debug(f"Location: {group['Location']}")
+
+    # Split the group into prefixes and suffixes
+    prefixes = group[group["KmerType"] == "prefix"].copy()
+    suffixes = group[group["KmerType"] == "suffix"].copy()
+
+    logger.debug(f"Prefixes: {prefixes.shape}")
+    logger.debug(f"Suffixes: {suffixes.shape}")
+
+    try:
+        combined_df = pd.merge(
+            prefixes,
+            suffixes,
+            on=["genomeID", "length"],
+            how="outer",
+            suffixes=("_prefix", "_suffix"),
+            sort=False
+        )
+        logger.debug(f"Combined dtypes: {combined_df.dtypes}")
+
+
+    except MemoryError:
+        logger.error("Ran out of memory. Skipping.")
+        return
+
+    # Fill missing values for contigs and locations
+    combined_df.fillna(
+        {
+            "Contig_prefix": "None",
+            "Contig_suffix": "None",
+            "Location_prefix": np.nan,
+            "Location_suffix": np.nan,
+        },
+        inplace=True,
+    )
+
+    logger.debug("Performed merge of prefixes and suffixes")
+
+    # Vectorized computation of the 'distance' column:
+    #   - If either location is missing, return a string flag.
+    #   - If contigs differ, flag as 'ContigsDifferent'.
+    #   - Otherwise compute the numeric distance.
+    missing_mask = (
+        combined_df["Location_prefix"].isna() | combined_df["Location_suffix"].isna()
+    )
+    prefix_missing = combined_df["Location_prefix"].isna()
+
+    distance = pd.Series(index=combined_df.index, dtype=object)
+    distance[missing_mask] = np.where(
+        prefix_missing[missing_mask], "PrefixMissing", "SuffixMissing"
+    )
+
+    contigs_different = (~missing_mask) & (
+        combined_df["Contig_prefix"] != combined_df["Contig_suffix"]
+    )
+    distance[contigs_different] = "ContigsDifferent"
+
+    valid_numeric = (~missing_mask) & (
+        combined_df["Contig_prefix"] == combined_df["Contig_suffix"]
+    )
+    distance[valid_numeric] = (
+        np.abs(
+            np.abs(combined_df.loc[valid_numeric, "Location_suffix"])
+            - np.abs(combined_df.loc[valid_numeric, "Location_prefix"])
+        )
+        + k
+        + 2 * g
+    )
+
+    combined_df["distance"] = distance
+    logger.debug(f"Sample distance: {combined_df['distance'].head()}")
+    logger.debug("Applied vectorized conditions for distance calculation")
+
+    # Calculate 'Difference' only for rows with numeric distances
+    distance_numeric = pd.to_numeric(combined_df["distance"], errors="coerce")
+    calc_diff_mask = distance_numeric.notna()
+    combined_df.loc[calc_diff_mask, "Difference"] = (
+        distance_numeric[calc_diff_mask]
+        - combined_df.loc[calc_diff_mask, "length"]
+    ).astype(float)
+    logger.debug("Calculated 'Difference'")
+
+    # Consolidate GeneID and Contig columns using values from either merge side
+    combined_df["GeneID"] = combined_df["GeneID_prefix"].combine_first(
+        combined_df["GeneID_suffix"]
+    )
+    combined_df["Contig"] = combined_df["Contig_prefix"].combine_first(
+        combined_df["Contig_suffix"]
+    )
+
+    result = combined_df[
+        [
+            "genomeID",
+            "GeneID",
+            "kmerID_prefix",
+            "kmerID_suffix",
+            "Contig_prefix",
+            "Contig_suffix",
+            "Contig",
+            "distance",
+            "Difference",
+            "Location_prefix",
+            "Location_suffix",
+        ]
+    ]
+    logger.debug("Prepared the final result DataFrame")
+
+    return result
+
+
+def process_group_wrapper(args):
+    name, group, k, g = args
+    logger.info(f"Processing group: {name}")
+    return calculate_distances(group, k, g)
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description=
-        "Extract k-mer sequences from a genome based on a provided locus tag and TSV file."
+        description="Extract k-mer sequences from a genome based on a provided locus tag and TSV file."
     )
-
     parser.add_argument(
         "-i",
         "--input",
-        type=str,
         required=True,
         help="Input processed bwa fastmap output",
         metavar="FILE",
     )
-
     parser.add_argument(
         "-o",
         "--output",
-        type=str,
         required=True,
         help="Output distance dataframe for mappings",
         metavar="FILE",
     )
-
     parser.add_argument(
-        "-k",
-        "--kmer-length",
-        type=int,
-        required=True,
-        help="Kmer Length",
+        "-g", "--gap-distance", type=int, required=True, help="Gap distance"
     )
-
     parser.add_argument(
-        "-g",
-        "--gap-distance",
-        type=int,
-        required=True,
-        help="Gap distance",
+        "-k", "--kmer-length", type=int, required=True, help="Kmer Length"
     )
-
+    parser.add_argument(
+        "-t", "--threads", type=int, default=1,
+        help="Number of worker processes to use (default: 1)."
+    )
     parser.add_argument(
         "-v",
         "--verbose",
         action="count",
         default=0,
-        help=
-        "Increase verbosity level. Can be specified multiple times for more detailed logs.",
+        help="Increase verbosity level. Can be specified multiple times for more detailed logs.",
     )
-
-    # Parse the arguments
     args = parser.parse_args()
 
+    # Configure logging based on verbosity
     if args.verbose == 0:
         logger.remove()
     elif args.verbose == 1:
@@ -96,24 +196,54 @@ def main():
         logger.remove()
         logger.add(sys.stderr, level="DEBUG")
 
-    df = pd.read_csv(args.input, sep="\t")
-    # df[["GeneID", "KmerType"]] = df["kmerID"].str.rsplit("_", n=3,
-    # expand=True)[[0, 1]]
+    # Read the input CSV with specified data types to reduce conversion overhead
+    dtype_spec = {"genomeID": str, "kmerID": str, "Contig": str, "Location": "Int64"}
+    df = pd.read_csv(args.input, sep="\t", na_values="Null", dtype=dtype_spec)
+    logger.debug("Read TSV")
 
-    # Regular expression to match the pattern
-    pattern = r'(.+?-len\d+)(_.+)$'
+    # Precompute group-independent columns: extract GeneID, determine KmerType, and calculate gene length
+    df["GeneID"] = df["kmerID"].str.extract(r"(.+?-len\d+)", expand=False)
+    logger.debug("Gene ID Extracted")
+    df["KmerType"] = np.where(df["kmerID"].str.contains("prefix"), "prefix", "suffix")
+    logger.debug("Prefix/Suffix identity extracted")
+    df["length"] = (
+        df["GeneID"].str.split("-").str[-1].str.replace("len", "").astype(float)
+    )
+    logger.debug("Length extracted")
 
-    # Extracting and creating new columns
-    df[['GeneID', 'KmerType']] = df['kmerID'].str.extract(pattern)
+    # Prepare groups for parallel processing based on GeneID
+    groups = [
+        (name, group, args.kmer_length, args.gap_distance)
+        for name, group in df.groupby("GeneID")
+    ]
+    logger.debug("Dataframe grouped by GeneID")
 
-    with open(args.output, "w") as file:
-        file.write(
-            "GeneID\tPrefix\tSuffix\tContig\tDistance\tDifference\tPrefixLocation\tSuffixLocation\n"
-        )  # Write header
-        # Iterate over each gene group and write distances
-        for name, group in df.groupby("GeneID"):
-            logger.info(f"Writing information for {name}")
-            write_distances(group, file, args.kmer_length, args.gap_distance)
+    # Use a context manager for the Pool to ensure proper cleanup
+    with Pool(processes=args.threads) as pool:
+        results = pool.map(process_group_wrapper, groups)
+
+    # Concatenate the results from all groups and write to file
+    final_result = pd.concat(results, ignore_index=True)
+    logger.debug("Results concatenated")
+    Path(os.path.dirname(args.output)).mkdir(parents=True, exist_ok=True)
+    final_result.to_csv(
+        args.output,
+        sep="\t",
+        index=False,
+        header=[
+            "GenomeID",
+            "GeneID",
+            "PrefixID",
+            "SuffixID",
+            "PrefixContig",
+            "SuffixContig",
+            "Contig",
+            "Distance",
+            "Difference",
+            "PrefixLocation",
+            "SuffixLocation",
+        ],
+    )
 
 
 if __name__ == "__main__":
