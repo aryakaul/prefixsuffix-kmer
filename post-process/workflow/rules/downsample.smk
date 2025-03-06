@@ -10,8 +10,7 @@ rule downsample_df:
         numbergenomes=config["number_genomes"],
         metadata661k=f"{dir_intermediate()}"
         + "/../supp_data/File4_QC_characterisation_661K.txt",
-        metadataallthebact=f"{dir_intermediate()}"
-        + "/../supp_data/hq_set.sample_list.txt.gz",
+        metadataallthebact=Path(workflow.basedir) / "../supp_data/hq_set.sample_list.txt.gz",
         script=Path(workflow.basedir) / "scripts/sample_genomes",
     shell:
         """
@@ -38,4 +37,37 @@ rule downsample_df:
                 -o {output.output_csv} \\
                 -vvv
         fi
+        """
+
+rule downsample_annotdf:
+    input:
+        prevdownsampled_df=fn_downsampled_df("{batch}", "{genebatch}", "{passinggene}"),
+    output:
+        downsampled_annot_df=fn_downsampled_annot_df("{batch}", "{genebatch}", "{passinggene}"),
+    conda:
+        "../envs/ete3.yml"
+    params:
+        numbergenomes=config["number_annotate"],
+        metadata661k=f"{dir_intermediate()}"
+        + "/../supp_data/File4_QC_characterisation_661K.txt",
+        metadataallthebact=Path(workflow.basedir) / "../supp_data/hq_set.sample_list.txt.gz",
+        script=Path(workflow.basedir) / "scripts/sample_genomes",
+    shell:
+        """
+        # Create a temporary directory for the split files
+        rm -rf $(dirname {output})/tmp_clusters
+
+        mkdir -p $(dirname {output})/tmp_clusters
+
+        # Split the file by 'Cluster'
+        zcat {input} | csvtk split -f Cluster -o $(dirname {output})/tmp_clusters
+
+        # For each split file, sample X random lines
+        for f in $(dirname {output})/tmp_clusters/*.csv; do 
+            {{  head -n 1 $f; tail -n +2 $f | shuf -n {params.numbergenomes}; }} > $(dirname $f)/$(basename $f .csv).csv_sample
+        done
+
+        # Concatenate all the sampled files into one CSV
+        csvtk concat $(dirname {output})/tmp_clusters/*.csv_sample | gzip - > {output}
+        rm -rf $(dirname {output})/tmp_clusters
         """

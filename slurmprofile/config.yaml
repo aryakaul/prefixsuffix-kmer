@@ -2,11 +2,11 @@ default-resources:
   - slurm_account=baym
   - slurm_partition=short
   - runtime="5h"
-  - mem="4gb"
+  - mem="4G"
 
 
 jobs: 500
-restart-times: 0
+restart-times: 3
 max-jobs-per-second: 100
 cores: 14
   

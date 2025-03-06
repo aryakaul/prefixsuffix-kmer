@@ -35,13 +35,15 @@ PGS = []
 PASSING_GENES_GLOB = glob.glob(
     os.path.join(f"{dir_prevoutput()}", "*/*/passing_genes/*/*_clusters.csv.gz")
 )
+#print(os.path.join(f"{dir_prevoutput()}", "*/*/passing_genes/*/*_clusters.csv.gz"))
 for g in PASSING_GENES_GLOB:
+    #print(g)
     results = g.split("/")
     PGS.append(results[-2])
     PG_GENEBATCH.append(results[-4])
     PG_BATCH.append(results[-5])
 
-print(PGS)
+#print(PGS)
 
 
 def get_passinggenes():
@@ -54,6 +56,16 @@ def get_passinggenes_batches():
 
 def get_passinggenes_genebatches():
     return PG_GENEBATCH
+
+
+def fn_bakta_annot_done(_batch, _genebatch, _passinggene):
+    return f"{dir_intermediate()}/bakta_out/{_batch}/{_genebatch}/{_passinggene}/.bakta_complete"
+
+def fn_blastidx_done(_batch, _genebatch, _passinggene):
+    return f"{dir_intermediate()}/blast/{_batch}/{_genebatch}/{_passinggene}/.blastdb_complete"
+
+def fn_blast_done(_batch, _genebatch, _passinggene):
+    return f"{dir_intermediate()}/blast/{_batch}/{_genebatch}/{_passinggene}/.blast_complete"
 
 
 def fn_bakta_gff(_batch, _genome):
@@ -97,6 +109,11 @@ def fn_downsampled_df(_batch, _genebatch, _passinggene):
         f"{dir_intermediate()}/downsampled_df/{_batch}/{_genebatch}/{_passinggene}_downsampled.csv.gz",
     )
 
+def fn_downsampled_annot_df(_batch, _genebatch, _passinggene):
+    return (
+        f"{dir_intermediate()}/downsampled_annot_df/{_batch}/{_genebatch}/{_passinggene}/{_passinggene}_downsampled.csv.gz",
+    )
+
 
 def fn_cluster_csv(_batch, _genebatch, _passinggene):
     return f"{dir_prevoutput()}/{_batch}/{_genebatch}/passing_genes/{_passinggene}/{_passinggene}_clusters.csv.gz"
@@ -115,19 +132,22 @@ def fn_decompgenome_agg(_batch, _genebatch, _passinggene):
 
 
 def fn_downsample_nwk(_batch, _genebatch, _passinggene):
-    return f"{dir_intermediate()}/decompressed_genomes/{_batch}/{_genebatch}/{_passinggene}.nwk"
+    return f"{dir_intermediate()}/attotree/{_batch}/{_genebatch}/raw/{_passinggene}.nwk"
+
+def fn_decompgenome_list(_batch, _genebatch, _passinggene):
+    return f"{dir_intermediate()}/decompressed_genomes/{_batch}/{_genebatch}/{_passinggene}_filelist.txt"
 
 
 def fn_colorrange_annot(_batch, _genebatch, _passinggene):
-    return f"{dir_intermediate()}/decompressed_genomes/{_batch}/{_genebatch}/{_passinggene}--itol/colorrange.annot"
+    return f"{dir_intermediate()}/attotree/{_batch}/{_genebatch}/itol/{_passinggene}--itol/colorrange.annot"
 
 
 def fn_simplebar_annot(_batch, _genebatch, _passinggene):
-    return f"{dir_intermediate()}/decompressed_genomes/{_batch}/{_genebatch}/{_passinggene}--itol/simplebar.annot"
+    return f"{dir_intermediate()}/attotree/{_batch}/{_genebatch}/itol/{_passinggene}--itol/simplebar.annot"
 
 
 def fn_itoltree(_batch, _genebatch, _passinggene):
-    return f"{dir_intermediate()}/decompressed_genomes/{_batch}/{_genebatch}/{_passinggene}--itol/{_passinggene}--itol.nwk"
+    return f"{dir_intermediate()}/attotree/{_batch}/{_genebatch}/itol/{_passinggene}--itol/{_passinggene}--itol.nwk"
 
 
 def fn_blastouts(_batch, _genebatch, _passinggene):

@@ -3,9 +3,9 @@
 ########################
 
 # (1) Directories for individual stages of the workflow
-input_dir:            input/refseq-genes
-intermediate_dir:     /n/scratch/users/a/ak586/refseq-intermediate-800dist-25minsamp
-output_dir:           /n/scratch/users/a/ak586/refseq-output-800dist-25minsamp
+input_dir:            input/subset
+intermediate_dir:     /n/data1/hms/dbmi/baym/arya/data/subset-intermediate-800dist-25minsamp-k20-g4
+output_dir:           /n/data1/hms/dbmi/baym/arya/data/subset-output-800dist-25minsamp-k20-g4
 conda_dir:            .conda
 
 # (2) Parameters for Snakemake execution
@@ -20,7 +20,7 @@ use_conda:            True # build conda environments automatically by Snakemake
 #     - gap distance is
 #     - batch size is
 #     - cluster sample size is
-kmer_length:            26
+kmer_length:            20
 gap_distance:           4
 cluster_sample_size:    4
 batch_size:             500

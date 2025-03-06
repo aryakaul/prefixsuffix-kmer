@@ -1,22 +1,28 @@
 rule bakta_annotation:
     input:
-        fa=f"{dir_prevoutput()}/decompressed_genomes/genomes" + "/{batch}/{genome}.fa",
+        filelist=fn_decompgenome_list("{batch}", "{genebatch}", "{passinggene}"),
+        downsampled_annot_df=fn_downsampled_annot_df("{batch}", "{genebatch}", "{passinggene}"),
     output:
-        genbank=fn_bakta_gff("{batch}", "{genome}"),
-        faa=fn_bakta_faa("{batch}", "{genome}"),
+        bakta_annot_flag=fn_bakta_annot_done("{batch}", "{genebatch}", "{passinggene}")
     conda:
         "../envs/bakta.yml"
     params:
-        output_dir=f"{dir_intermediate()}/bakta_out" + "/{batch}/{genome}",
-        prefix="{genome}",
+        #output_dir=f"{dir_intermediate()}/bakta_out" + "/{batch}/{genome}",
+        #prefix="{genome}",
         bakta_db=config["bakta_db"],
     shell:
         """
-        bakta \\
-            --db {params.bakta_db}  \\
-            --output {params.output_dir}  \\
-            --prefix {params.prefix}  \\
-            --force \\
-            --locus-tag {params.prefix} \\
-            {input.fa}
+        mkdir -p $(dirname {output})
+        zcat {input.downsampled_annot_df} | sed 1d | while read -r p; do
+            seqname=$(echo $p | cut -d, -f2)
+            inputfa=$(grep "$seqname" {input.filelist})
+            bakta \\
+                --db {params.bakta_db}  \\
+                --output $(dirname {output})/$seqname  \\
+                --prefix $seqname \\
+                --force \\
+                --locus-tag $seqname \\
+                $inputfa 
+        done
+        touch {output}
         """

@@ -1,7 +1,7 @@
 rule build_sketched_tree:
     output:
         tree_newick=fn_downsample_nwk("{batch}", "{genebatch}", "{passinggene}"),
-        filelist=f"{{dir_intermediate()}}/decompressed_genomes/{batch}/{genebatch}/{passinggene}_filelist.txt",
+        filelist=fn_decompgenome_list("{batch}", "{genebatch}", "{passinggene}")
     input:
         chkpntaggregate_genomefasta_dir,
     conda:
@@ -27,22 +27,21 @@ rule itol_annottext:
     conda:
         "../envs/pandas.yml"
     params:
-        661kmetadata=f"{dir_intermediate()}" + "/../supp_data/File2_taxid_lineage_661K.txt",
+        metadata_661k=f"{dir_intermediate()}" + "/../supp_data/File2_taxid_lineage_661K.txt",
         script=Path(workflow.basedir) / "scripts/make_itol_annots",
     shell:
         """
-        if [ "{wildcards.batch}" = "661k_allsamples" ]; then
+        #if [ "{wildcards.batch}" == "661k_allsamples" ]; then
+        #    {params.script} \\
+                #        -i {input.clustercsv} \\
+                #-t {input.tree_newick} \\
+                #-m {params.metadata_661k} \\
+                #-o $(dirname {output.newtree})
+        #else
             {params.script} \\
                 -i {input.clustercsv} \\
                 -t {input.tree_newick} \\
-                -m {params.661kmetadata} \\
                 -o $(dirname {output.newtree})
-        else
-            {params.script} \\
-                -i {input.clustercsv} \\
-                -t {input.tree_newick} \\
-                -o $(dirname {output.newtree})
-        fi
         """
 
 rule minimal_cuts:

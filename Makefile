@@ -44,10 +44,10 @@ endif
 ######################
 
 all: ## Run everything
-	snakemake --cores all $(CONDA_PARAMS) -p --keep-going --retries 10 --rerun-incomplete $(SNAKEMAKE_PARAM_DIR)
+	snakemake --cores all $(CONDA_PARAMS) -p --keep-going --retries 2 --rerun-incomplete $(SNAKEMAKE_PARAM_DIR)
 
 cluster: ## Run everything but on the CLUSTER
-	snakemake $(CONDA_PARAMS) --profile o2profile -p --rerun-incomplete $(SNAKEMAKE_PARAM_DIR) --executor cluster-generic
+	snakemake $(CONDA_PARAMS) --profile slurmprofile -p --keep-going --rerun-incomplete $(SNAKEMAKE_PARAM_DIR) --executor slurm
 
 help: ## Print help messages
 	@printf "$$(grep -hE '^\S*(:.*)?##' $(MAKEFILE_LIST) \
@@ -99,7 +99,7 @@ reports: ## Create html report
 ####################
 
 test: ## Run the workflow on test data
-	#snakemake -d .test --cores $(CONDA_PARAMS) -p --show-failed-logs --rerun-incomplete
+	snakemake -d .test --cores all $(CONDA_PARAMS) -p --show-failed-logs --rerun-incomplete
 	@if [ -d ".test" ]; then \
 		$(MAKE) -C .test; \
 	fi

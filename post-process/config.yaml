@@ -4,17 +4,17 @@
 
 # (1) Directories for individual stages of the workflow
 input_dir:            input
-intermediate_dir:     /n/scratch/users/a/ak586/refseqpost-intermediate-800dist-25minsamp
-output_dir:           /n/scratch/users/a/ak586/refseqpost-output-800dist-25minsamp
-previnput_dir:        ../input/refseq-genes
+intermediate_dir:     /home/ak586/baym/projects/prefixsuffix-kmer/manual/sensitivity_analysis/fiverandos/intermediate
+output_dir:           /home/ak586/baym/projects/prefixsuffix-kmer/manual/sensitivity_analysis/fiverandos/output
+previnput_dir:        /n/data1/hms/dbmi/baym/arya/projects/prefixsuffix-kmer/manual/sensitivity_analysis/fiverandos
 previntermediate_dir:     /n/scratch/users/a/ak586/refseq-intermediate-800dist-25minsamp
-prevoutput_dir:           /n/scratch/users/a/ak586/refseq-output-800dist-25minsamp
+prevoutput_dir:           /n/data1/hms/dbmi/baym/arya/data/subset-subset-output-800dist-25minsamp-k26-g4
 conda_dir:            .conda
 
 # (2) Parameters for Snakemake execution
 use_conda:            True # build conda environments automatically by Snakemake
 
-bakta_db:             /n/data1/hms/dbmi/baym/databases/bakta_dbv5/db
+bakta_db:             /n/data1/hms/dbmi/baym/databases/bakta_dbv6/db
 
 ##############
 # PARAMETERS #
@@ -25,5 +25,5 @@ number_genomes:               500
 window_size:                  500
 kmer_length:                  26
 
-number_annotate:              4
-number_matching_decompress:   0
+number_annotate:              3
+number_matching_decompress:   10000
