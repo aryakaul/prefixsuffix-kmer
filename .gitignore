@@ -10,3 +10,4 @@ manual/
 snakemake.*
 .test/intermediate/
 .test/output/
+.test/.conda

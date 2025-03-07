@@ -1,0 +1,25 @@
+default-resources:
+  - slurm_account=baym
+  - slurm_partition=short
+  - runtime="5h"
+  - mem="10G"
+  - cpus_per_task=8
+
+
+jobs: 500
+restart-times: 3
+max-jobs-per-second: 100
+cores: 14
+  
+rerun-incomplete: True
+printshellcmds: True
+
+groups:
+  - build_sketched_tree=attotreegroup
+  - itol_annottext=attotreegroup
+  - minimal_cuts=attotreegroup  
+  - bakta_annotation=baktagroup
+
+group-components:
+  - attotreegroup=500
+  - baktagroup=5
