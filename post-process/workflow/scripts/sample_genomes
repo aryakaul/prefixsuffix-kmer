@@ -14,7 +14,10 @@ import concurrent.futures
 
 def get_hq(hq_file, allthebact=False):
     if allthebact:
-        metadata_df = pd.read_csv(hq_file, sep='\t', header=None, names=['sample_id'])
+        metadata_df = pd.read_csv(hq_file,
+                                  sep='\t',
+                                  header=None,
+                                  names=['sample_id'])
         hq_samples = metadata_df['sample_id']
     else:
         metadata_df = pd.read_csv(hq_file, sep='\t')
@@ -22,16 +25,21 @@ def get_hq(hq_file, allthebact=False):
                                      True]['sample_id']
     return hq_samples
 
+
 def sample_dupseqs(df, maxgenomes, dup_file):
     if maxgenomes >= len(df):
-        logger.warning("Warning: maxgenomes is greater than the number of available genomes. Returning the entire dataframe.")
+        logger.warning(
+            "Warning: maxgenomes is greater than the number of available genomes. Returning the entire dataframe."
+        )
         return df
 
     # Step 1: Load duplicates file and extract contig information
-    dup_df = pd.read_csv(dup_file, sep='\t', header=None, names=['Abundance', 'FastaDescriptions'])
-    dup_df['Contigs'] = dup_df['FastaDescriptions'].apply(
-        lambda x: ', '.join([f"{part.split('_')[0]}" for part in x.split(', ')])
-    )
+    dup_df = pd.read_csv(dup_file,
+                         sep='\t',
+                         header=None,
+                         names=['Abundance', 'FastaDescriptions'])
+    dup_df['Contigs'] = dup_df['FastaDescriptions'].apply(lambda x: ', '.join(
+        [f"{part.split('_')[0]}" for part in x.split(', ')]))
     unique_sequences = dup_df.shape[0]
     logger.info(f"{unique_sequences} unique sequences exist")
 
@@ -52,11 +60,13 @@ def sample_dupseqs(df, maxgenomes, dup_file):
         sequence_subset = df[df['Contig'].isin(seq.split(', '))]
 
         if len(sequence_subset) != abundance:
-            logger.warning(f"{len(sequence_subset)} != {abundance}. Likely because filtering high-quality genomes removed some.")
-
+            logger.warning(
+                f"{len(sequence_subset)} != {abundance}. Likely because filtering high-quality genomes removed some."
+            )
 
         # Minimum allocation of 1, or ideal_samples_per_seq if abundance allows
-        sample_count = min(ideal_samples_per_seq, abundance, len(sequence_subset))
+        sample_count = min(ideal_samples_per_seq, abundance,
+                           len(sequence_subset))
         logger.info(f"Sampling {sample_count} of them")
 
         # Sample from this sequence and add to the sampled_df
@@ -65,18 +75,18 @@ def sample_dupseqs(df, maxgenomes, dup_file):
 
         remaining_genomes -= len(sampled_rows)
 
-    logger.debug(f"{remaining_genomes} left to sample. Going back to grab more.")
+    logger.debug(
+        f"{remaining_genomes} left to sample. Going back to grab more.")
 
     # Step 4: Distribute remaining samples if maxgenomes is not yet reached
     if remaining_genomes > 0:
         # Filter df to include only rows with Contigs in dup_df['Contigs'] and exclude already sampled rows
-        available_for_resampling = df[
-            df['Contig'].isin(
-                [contig for seq in dup_df['Contigs'] for contig in seq.split(', ')]
-            ) & ~df.index.isin(sampled_df.index)
-        ]
+        available_for_resampling = df[df['Contig'].isin([
+            contig for seq in dup_df['Contigs'] for contig in seq.split(', ')
+        ]) & ~df.index.isin(sampled_df.index)]
 
-        additional_samples = available_for_resampling.sample(remaining_genomes, random_state=1)
+        additional_samples = available_for_resampling.sample(remaining_genomes,
+                                                             random_state=1)
         sampled_df = pd.concat([sampled_df, additional_samples])
 
     return sampled_df.reset_index(drop=True)
@@ -117,6 +127,7 @@ def sample_clusters(df, maxgenomes):
         additional_samples = excess_clusters.sample(remaining_genomes)
         sampled_df = pd.concat([sampled_df, additional_samples])
     return sampled_df
+
 
 def main():
     parser = argparse.ArgumentParser(description="Gene clustering script.")
@@ -161,7 +172,8 @@ def main():
         "--duplicate_seqs",
         type=str,
         required=False,
-        help="Path to a file describing duplicate sequences counts from seqkit rmdup",
+        help=
+        "Path to a file describing duplicate sequences counts from seqkit rmdup",
     )
     parser.add_argument(
         "-v",
@@ -188,9 +200,11 @@ def main():
     df_all = pd.read_csv(args.inputcsv)
     if args.metadata:
         if args.allthebact:
-            hqdf = df_all.loc[df_all['GenomeID'].isin(get_hq(args.metadata, allthebact=True))]
+            hqdf = df_all.loc[df_all['GenomeID'].isin(
+                get_hq(args.metadata, allthebact=True))]
         else:
-            hqdf = df_all.loc[df_all['GenomeID'].isin(get_hq(args.metadata, allthebact=False))]
+            hqdf = df_all.loc[df_all['GenomeID'].isin(
+                get_hq(args.metadata, allthebact=False))]
 
     if len(hqdf) < args.maxgenomes:
         logger.warning("Using non-hq genomes!")
@@ -203,7 +217,8 @@ def main():
         downsampled_df.to_csv(args.output)
         logger.success("Extracted all files successfully")
     else:
-        downsampled_df = sample_dupseqs(df, args.maxgenomes, args.duplicate_seqs)
+        downsampled_df = sample_dupseqs(df, args.maxgenomes,
+                                        args.duplicate_seqs)
         downsampled_df.to_csv(args.output)
         logger.success("Extracted all files successfully")
 

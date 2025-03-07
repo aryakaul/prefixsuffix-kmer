@@ -1,7 +1,9 @@
 rule make_blastidx:
     input:
         filelist=fn_decompgenome_list("{batch}", "{genebatch}", "{passinggene}"),
-        downsampled_annot_df=fn_downsampled_annot_df("{batch}", "{genebatch}", "{passinggene}"),
+        downsampled_annot_df=fn_downsampled_annot_df(
+            "{batch}", "{genebatch}", "{passinggene}"
+        ),
     output:
         fn_blastidx_done("{batch}", "{genebatch}", "{passinggene}"),
     conda:
@@ -17,14 +19,17 @@ rule make_blastidx:
         touch {output}
         """
 
+
 rule run_blast:
     input:
         filelist=fn_decompgenome_list("{batch}", "{genebatch}", "{passinggene}"),
-        downsampled_annot_df=fn_downsampled_annot_df("{batch}", "{genebatch}", "{passinggene}"),
+        downsampled_annot_df=fn_downsampled_annot_df(
+            "{batch}", "{genebatch}", "{passinggene}"
+        ),
         queryfasta=fn_passinggenefasta("{batch}", "{genebatch}", "{passinggene}"),
         blastidx=fn_blastidx_done("{batch}", "{genebatch}", "{passinggene}"),
     output:
-        fn_blast_done("{batch}", "{genebatch}", "{passinggene}")
+        fn_blast_done("{batch}", "{genebatch}", "{passinggene}"),
     conda:
         "../envs/blast.yml"
     shell:
@@ -32,26 +37,27 @@ rule run_blast:
         zcat {input.downsampled_annot_df} | sed 1d | while read -r p; do
             seqname=$(echo $p | cut -d, -f2)
             inputfa=$(grep "$seqname" {input.filelist})
-            blastn -query {input.queryfasta} -subject $inputfa -outfmt 6 > $(dirname {output})/$seqname.blastout
+            blastn -query {input.queryfasta} -subject $inputfa -outfmt 6 \\
+                    > $(dirname {output})/$seqname.blastout
         done
         touch {output}
         """
 
-rule region_minimap:
-    input:
-        reffasta=fn_regionfa("{batch}", "{genebatch}", "{passinggene}", "{contig}"),
-        queryfasta=fn_passinggenefasta("{batch}", "{genebatch}", "{passinggene}"),
-    output:
-        fn_minimaprawout("{batch}", "{genebatch}", "{passinggene}", "{contig}"),
-    conda:
-        "../envs/minimap2.yml"
-    shell:
-        """
-        minimap2 -x splice -un -k8 {input.reffasta} {input.queryfasta} > {output}
-        """
 
+# rule region_minimap:
+# input:
+# reffasta=fn_regionfa("{batch}", "{genebatch}", "{passinggene}", "{contig}"),
+# queryfasta=fn_passinggenefasta("{batch}", "{genebatch}", "{passinggene}"),
+# output:
+# fn_minimaprawout("{batch}", "{genebatch}", "{passinggene}", "{contig}"),
+# conda:
+# "../envs/minimap2.yml"
+# shell:
+# """
+# minimap2 -x splice -un -k8 {input.reffasta} {input.queryfasta} > {output}
+# """
 #
-#rule make_blastidx:
+# rule make_blastidx:
 #    input:
 #        reffasta=fn_regionfa("{batch}", "{genebatch}", "{passinggene}", "{contig}"),
 #    output:
@@ -64,7 +70,7 @@ rule region_minimap:
 #        """
 #
 #
-#checkpoint run_blast:
+# checkpoint run_blast:
 #    input:
 #        reffastas=chkpntaggregate_regionalfastas,
 #        #reffastadir=fn_regionfadir("{batch}", "{genebatch}", "{passinggene}"),

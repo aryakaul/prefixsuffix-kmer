@@ -1,7 +1,7 @@
 rule build_sketched_tree:
     output:
         tree_newick=fn_downsample_nwk("{batch}", "{genebatch}", "{passinggene}"),
-        filelist=fn_decompgenome_list("{batch}", "{genebatch}", "{passinggene}")
+        filelist=fn_decompgenome_list("{batch}", "{genebatch}", "{passinggene}"),
     input:
         chkpntaggregate_genomefasta_dir,
     conda:
@@ -27,7 +27,8 @@ rule itol_annottext:
     conda:
         "../envs/pandas.yml"
     params:
-        metadata_661k=f"{dir_intermediate()}" + "/../supp_data/File2_taxid_lineage_661K.txt",
+        metadata_661k=f"{dir_intermediate()}"
+        + "/../supp_data/File2_taxid_lineage_661K.txt",
         script=Path(workflow.basedir) / "scripts/make_itol_annots",
     shell:
         """
@@ -43,6 +44,7 @@ rule itol_annottext:
                 -t {input.tree_newick} \\
                 -o $(dirname {output.newtree})
         """
+
 
 rule minimal_cuts:
     output:

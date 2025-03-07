@@ -47,7 +47,7 @@ all: ## Run everything
 	snakemake --cores all $(CONDA_PARAMS) -p --rerun-incomplete $(SNAKEMAKE_PARAM_DIR)
 
 cluster: ## Run everything but on the CLUSTER
-	snakemake $(CONDA_PARAMS) --profile o2profile -p --rerun-incomplete $(SNAKEMAKE_PARAM_DIR) --executor cluster-generic
+	snakemake $(CONDA_PARAMS) --profile slurmprofile -p --keep-going --rerun-incomplete $(SNAKEMAKE_PARAM_DIR) --executor slurm
 
 cluster: ## Run everything BUT ON THE CLUSTER
 

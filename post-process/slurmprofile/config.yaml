@@ -3,7 +3,7 @@ default-resources:
   - slurm_partition=short
   - runtime="5h"
   - mem="10G"
-  - cpus_per_task=8
+  - cores=8
 
 
 jobs: 500
@@ -22,4 +22,4 @@ groups:
 
 group-components:
   - attotreegroup=500
-  - baktagroup=5
+  - baktagroup=3

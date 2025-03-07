@@ -13,6 +13,7 @@ Code copied from Prophyle:
     https://github.com/prophyle/prophyle/blob/50419f0c551f03eb6a3163f32cbc14713cd1a9bb/prophyle/prophyle_propagation_preprocessing.py#L43
 """
 
+
 def is_float(string):
     try:
         float(string)
@@ -34,7 +35,9 @@ def autocomplete_internal_node_names(tree):
             for x in n.children:
                 assert hasattr(x, "name")
 
-            if not hasattr(n, "name") or n.name == "" or n.name is None or is_float(n.name):
+            if not hasattr(
+                    n, "name") or n.name == "" or n.name is None or is_float(
+                        n.name):
                 names = [x.name for x in n.children]
                 lmin_name = sorted(names)[0]
 

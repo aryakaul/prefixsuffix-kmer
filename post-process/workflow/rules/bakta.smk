@@ -1,9 +1,11 @@
 rule bakta_annotation:
     input:
         filelist=fn_decompgenome_list("{batch}", "{genebatch}", "{passinggene}"),
-        downsampled_annot_df=fn_downsampled_annot_df("{batch}", "{genebatch}", "{passinggene}"),
+        downsampled_annot_df=fn_downsampled_annot_df(
+            "{batch}", "{genebatch}", "{passinggene}"
+        ),
     output:
-        bakta_annot_flag=fn_bakta_annot_done("{batch}", "{genebatch}", "{passinggene}")
+        bakta_annot_flag=fn_bakta_annot_done("{batch}", "{genebatch}", "{passinggene}"),
     conda:
         "../envs/bakta.yml"
     params:

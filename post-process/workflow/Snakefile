@@ -11,8 +11,6 @@ report: "report/workflow.rst"
 
 
 ##### Target rules #####
-
-
 include: "rules/init.smk"
 include: "rules/downsample.smk"
 include: "rules/bakta.smk"
@@ -22,11 +20,11 @@ include: "rules/tree.smk"
 include: "rules/align.smk"
 
 
-
 ## WILDCARDS CONSTRAINS
 wildcard_constraints:
     sample=r"[a-zA-Z0-9_-]+",
     batch=r"[a-zA-Z0-9_-]+",
+
 
 rule all:
     input:
@@ -45,11 +43,11 @@ rule all:
             passinggene=get_passinggenes(),
         ),
         #expand(
-            #fn_decompregion_agg("{batch}", "{genebatch}", "{passinggene}"),
-            #zip,
-            #batch=get_passinggenes_batches(),
-            #genebatch=get_passinggenes_genebatches(),
-            #passinggene=get_passinggenes(),
+        #fn_decompregion_agg("{batch}", "{genebatch}", "{passinggene}"),
+        #zip,
+        #batch=get_passinggenes_batches(),
+        #genebatch=get_passinggenes_genebatches(),
+        #passinggene=get_passinggenes(),
         #),
         expand(
             fn_itoltree("{batch}", "{genebatch}", "{passinggene}"),
@@ -71,11 +69,11 @@ rule all:
             batch=get_passinggenes_batches(),
             genebatch=get_passinggenes_genebatches(),
             passinggene=get_passinggenes(),
-        )
+        ),
         expand(
             fn_blast_done("{batch}", "{genebatch}", "{passinggene}"),
             zip,
             batch=get_passinggenes_batches(),
             genebatch=get_passinggenes_genebatches(),
             passinggene=get_passinggenes(),
-        )
+        ),

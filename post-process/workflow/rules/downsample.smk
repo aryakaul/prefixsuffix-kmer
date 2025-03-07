@@ -10,7 +10,8 @@ rule downsample_df:
         numbergenomes=config["number_genomes"],
         metadata661k=f"{dir_intermediate()}"
         + "/../supp_data/File4_QC_characterisation_661K.txt",
-        metadataallthebact=Path(workflow.basedir) / "../supp_data/hq_set.sample_list.txt.gz",
+        metadataallthebact=Path(workflow.basedir)
+        / "../supp_data/hq_set.sample_list.txt.gz",
         script=Path(workflow.basedir) / "scripts/sample_genomes",
     shell:
         """
@@ -39,18 +40,22 @@ rule downsample_df:
         fi
         """
 
+
 rule downsample_annotdf:
     input:
         prevdownsampled_df=fn_downsampled_df("{batch}", "{genebatch}", "{passinggene}"),
     output:
-        downsampled_annot_df=fn_downsampled_annot_df("{batch}", "{genebatch}", "{passinggene}"),
+        downsampled_annot_df=fn_downsampled_annot_df(
+            "{batch}", "{genebatch}", "{passinggene}"
+        ),
     conda:
         "../envs/ete3.yml"
     params:
         numbergenomes=config["number_annotate"],
         metadata661k=f"{dir_intermediate()}"
         + "/../supp_data/File4_QC_characterisation_661K.txt",
-        metadataallthebact=Path(workflow.basedir) / "../supp_data/hq_set.sample_list.txt.gz",
+        metadataallthebact=Path(workflow.basedir)
+        / "../supp_data/hq_set.sample_list.txt.gz",
         script=Path(workflow.basedir) / "scripts/sample_genomes",
     shell:
         """

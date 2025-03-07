@@ -15,7 +15,8 @@ import multiprocessing
 import tarfile
 
 
-def process_bucket(group, file_mapping, window_size, extraction_dir, middle, k):
+def process_bucket(group, file_mapping, window_size, extraction_dir, middle,
+                   k):
     bucket = group["Bucket"].iloc[0]
     archive_file = file_mapping.get(bucket)
 
@@ -41,7 +42,8 @@ def process_bucket(group, file_mapping, window_size, extraction_dir, middle, k):
                         for record in SeqIO.parse(text_file, "fasta"):
                             # Process each record if its ID is in the contig set
                             if record.id in contig_set:
-                                matched_rows = group[group["Contig"] == record.id]
+                                matched_rows = group[group["Contig"] ==
+                                                     record.id]
                                 for _, row in matched_rows.iterrows():
                                     output_filename = os.path.join(
                                         extraction_dir, f"{record.id}.fasta")
@@ -50,42 +52,48 @@ def process_bucket(group, file_mapping, window_size, extraction_dir, middle, k):
                                     if prefix > 0 and suffix > 0:
                                         regions = extract_region(
                                             record.seq,
-                                            prefix-1,
-                                            suffix+k,
+                                            prefix - 1,
+                                            suffix + k,
                                             window_size,
                                             middle,
                                         )
                                     elif prefix < 0 and suffix < 0:
                                         regions = extract_region(
                                             record.seq,
-                                            prefix-k,
-                                            suffix+1,
+                                            prefix - k,
+                                            suffix + 1,
                                             window_size,
                                             middle,
                                         )
                                     else:
-                                        logger.error(f"Prefix: {prefix}, Suffix: {suffix}")
+                                        logger.error(
+                                            f"Prefix: {prefix}, Suffix: {suffix}"
+                                        )
                                         return
                                     records = []
                                     for start, end in regions:
-                                        extracted_seq = record.seq[start:end-1]
+                                        extracted_seq = record.seq[start:end -
+                                                                   1]
                                         new_record = SeqRecord(
                                             extracted_seq,
                                             id=f"{record.id}_{start}_{end}",
                                             description="",
                                         )
                                         if prefix < 0 and suffix < 0:
-                                            rc_seq = new_record.seq.reverse_complement()
+                                            rc_seq = new_record.seq.reverse_complement(
+                                            )
                                             rc_record = SeqRecord(
                                                 rc_seq,
-                                                id=f"{record.id}_{start}_{end}_rc",
-                                                description=""
-                                            )
+                                                id=
+                                                f"{record.id}_{start}_{end}_rc",
+                                                description="")
                                             records.append(rc_record)
                                         else:
                                             records.append(new_record)
-                                    with open(output_filename, "w") as output_handle:
-                                        SeqIO.write(records, output_handle, "fasta")
+                                    with open(output_filename,
+                                              "w") as output_handle:
+                                        SeqIO.write(records, output_handle,
+                                                    "fasta")
                                     logger.info(
                                         f"Extracted sequences written to {output_filename}"
                                     )
@@ -177,14 +185,11 @@ def main():
         default=500,
         help="Length of maximum window around hits, default is 500 bp",
     )
-    parser.add_argument(
-        "-k",
-        "--kmerlen",
-        type=int,
-        required=True,
-        help=
-        "K-mer length used."
-    )
+    parser.add_argument("-k",
+                        "--kmerlen",
+                        type=int,
+                        required=True,
+                        help="K-mer length used.")
     parser.add_argument(
         "-m",
         "--middle",
@@ -223,7 +228,8 @@ def main():
             file_mapping[bucket_name] = str(line.strip())
 
     # df['Bucket'] = df['filename'].str.extract(r'^(.*)_.*-filterdists\.csv\.gz$', expand=False)
-    df['Bucket'] = df['filename'].str.extract(r'.*/(.*)_.*-filterdists\.csv\.gz$', expand=False)
+    df['Bucket'] = df['filename'].str.extract(
+        r'.*/(.*)_.*-filterdists\.csv\.gz$', expand=False)
     grouped = df.groupby("Bucket")
     with multiprocessing.Pool() as pool:
         pool.map(

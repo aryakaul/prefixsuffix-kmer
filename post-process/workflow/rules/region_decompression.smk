@@ -54,8 +54,8 @@ rule aggregate_regionalfastas:
         chkpntaggregate_blastouts,
         #fn_blastouts("{batch}", "{genebatch}", "{passinggene}"),
         #expand(
-            #fn_blastrawout("{batch}", "{genebatch}", "{passinggene}", "{contig}"),
-            #contig=glob_wildcards("{input.reffastadir}/{contig}.fasta").contig
+        #fn_blastrawout("{batch}", "{genebatch}", "{passinggene}", "{contig}"),
+        #contig=glob_wildcards("{input.reffastadir}/{contig}.fasta").contig
         #)
     shell:
         """
