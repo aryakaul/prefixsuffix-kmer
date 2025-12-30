@@ -22,7 +22,7 @@ groups:
 
 group-components:
   - kmergengroup=100
-  - fastmapgroup=800
+  - fastmapgroup=500
   - fastmapprocessgroup=400
   - fastmapdistances-group=50
   - fastmapparsedistances-group=200

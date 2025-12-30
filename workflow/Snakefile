@@ -20,7 +20,10 @@ include: "rules/fastmap_processing.smk"
 include: "rules/clusterdists.smk"
 include: "rules/genome_decompression.smk"
 
-localrules: aggregate, aggregate_2
+
+localrules:
+    aggregate,
+    aggregate_2,
 
 
 ## WILDCARDS CONSTRAINS

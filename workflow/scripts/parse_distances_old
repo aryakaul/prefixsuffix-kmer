@@ -10,60 +10,54 @@ def load_data(file_path):
     Load data from a file into a pandas DataFrame.
     """
     try:
-        dtype_dict = {
-            col: str
-            for col in pd.read_csv(file_path, nrows=0, sep='\t').columns
-        }
-        df = pd.read_csv(file_path, sep='\t', dtype=dtype_dict)
+        # Read entire file with all columns as strings
+        df = pd.read_csv(file_path, sep="\t", dtype=str)
         logger.info("Data loaded successfully from {}", file_path)
         return df
     except Exception as e:
-        logger.error("Failed to load data: {}", e)
-        raise
+        logger.debug("No matches found. Returning empty df", e)
+        return pd.DataFrame()
+        # raise
 
 
 def preprocess_data(df):
     """
     Preprocess the DataFrame: Convert 'Difference' to numeric and filter non-NaN rows.
     """
+    if df.empty:
+        return pd.DataFrame()
     logger.debug("Starting preprocessing of data")
-    df['Difference'] = pd.to_numeric(df['Difference'], errors='coerce')
-    filtered_df = df[df['Difference'].notna()].copy()
+    df["Difference"] = pd.to_numeric(df["Difference"], errors="coerce")
+    filtered_df = df[df["Difference"].notna()].copy()
     logger.info("Preprocessed data, {} rows remaining after filtering",
                 len(filtered_df))
     logger.debug("Filtered DataFrame head:\n{}", filtered_df.head())
     return filtered_df
 
 
-def extract_genome_id(contig_value):
-    """
-    Extract genome ID from 'Contig' column.
-    """
-    genome_id = contig_value.split('.')[0] if pd.notna(contig_value) else None
-    # logger.debug("Extracted genome ID {} from contig value {}", genome_id, contig_value)
-    return genome_id
-
-
 def find_closest_differences(df):
     """
     Find the rows with 'Difference' closest to 0 for each GenomeID and GeneID pair.
     """
+    if df.empty:
+        return pd.DataFrame()
     logger.debug(
         "Finding closest differences for each GenomeID and GeneID pair")
-    df['GenomeID'] = df['Contig'].apply(extract_genome_id)
+    # Vectorized extraction of GenomeID from the 'Contig' column.
+    df["GenomeID"] = df["Contig"].str.split(".").str[0]
 
-    # Function to find the row with closest 'Difference'
-    def closest_row(group):
-        return group.iloc[(group['Difference'] - 0).abs().argsort()[:1]]
+    # Use a temporary column to compute the absolute difference.
+    df["AbsDifference"] = df["Difference"].abs()
+    # For each group, find the index of the row with the smallest absolute difference.
+    idx = df.groupby(["GenomeID", "GeneID"])["AbsDifference"].idxmin()
+    closest_diff_df = df.loc[idx].reset_index(drop=True)
+    # Drop the temporary column.
+    closest_diff_df.drop(columns="AbsDifference", inplace=True)
 
-    # Group by both 'GenomeID' and 'GeneID', and apply the closest_row function
-    closest_diff_df = df.groupby(['GenomeID', 'GeneID']).apply(closest_row)
-
-    # Reset index to flatten the DataFrame
-    closest_diff_df.reset_index(drop=True, inplace=True)
-
-    logger.info("Found closest differences, resulting DataFrame has {} rows",
-                len(closest_diff_df))
+    logger.info(
+        "Found closest differences, resulting DataFrame has {} rows",
+        len(closest_diff_df),
+    )
     logger.debug("Closest differences DataFrame head:\n{}",
                  closest_diff_df.head())
 
@@ -98,7 +92,7 @@ def main():
     closest_diff_df = find_closest_differences(filtered_df)
     logger.info("Found closest differences per genome/gene!")
     save_to_file(closest_diff_df, args.output)
-    logger.success(f"File saved to {args.output}")
+    logger.success("File saved to {}", args.output)
 
 
 if __name__ == "__main__":

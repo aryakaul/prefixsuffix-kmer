@@ -11,6 +11,7 @@ import shutil
 from pathlib import Path
 from multiprocessing import Pool
 
+
 def calculate_distances(group, k, g):
     """
     Calculate distances between prefix and suffix k-mers in a given group
@@ -25,22 +26,27 @@ def calculate_distances(group, k, g):
     # Split group into prefix & suffix
     prefixes = group[group["KmerType"] == "prefix"].copy()
     suffixes = group[group["KmerType"] == "suffix"].copy()
+
+    # Strand from sign of Location; "+" if >=0, "-" if <0
+    prefixes["Strand"] = np.where(prefixes["Location"] < 0, "-", "+")
+    suffixes["Strand"] = np.where(suffixes["Location"] < 0, "-", "+")
+
     logger.debug(f"Prefixes shape: {prefixes.shape}")
     logger.debug(f"Suffixes shape: {suffixes.shape}")
 
     if prefixes.shape[0] > 10000 or suffixes.shape[0] > 10000:
-        logger.warning(f"More than 10,000 prefix or suffix matches. Likely MGE! Skipping. Prefix matches: {prefixes.shape[0]} Suffix matches: {suffixes.shape[0]}")
+        logger.warning(
+            f"More than 10,000 prefix or suffix matches. Likely MGE! Skipping. Prefix matches: {prefixes.shape[0]} Suffix matches: {suffixes.shape[0]}"
+        )
         return pd.DataFrame()
 
     # Merge on ["genomeID","length"]. 'outer' to keep all possible combos
-    merged = pd.merge(
-        prefixes,
-        suffixes,
-        on=["genomeID", "length"],
-        how="outer",
-        suffixes=("_prefix", "_suffix"),
-        sort=False
-    )
+    merged = pd.merge(prefixes,
+                  suffixes,
+                  on=["genomeID", "length", "Strand"],
+                  how="outer",
+                  suffixes=("_prefix", "_suffix"),
+                  sort=False)
 
     # Fill missing contigs with placeholders
     merged["Contig_prefix"] = merged["Contig_prefix"].fillna("None")
@@ -57,41 +63,49 @@ def calculate_distances(group, k, g):
     merged.loc[suffix_missing, "distance"] = "SuffixMissing"
 
     has_both = (~prefix_missing) & (~suffix_missing)
-    same_contig = has_both & (merged["Contig_prefix"] == merged["Contig_suffix"])
+    same_contig = has_both & (merged["Contig_prefix"]
+                              == merged["Contig_suffix"])
     merged.loc[same_contig, "distance"] = (
-        (
-            merged.loc[same_contig, "Location_suffix"].abs()
-            - merged.loc[same_contig, "Location_prefix"].abs()
-        ).abs()
-        + k
-        + 2*g
-    )
-    different_contig = has_both & (merged["Contig_prefix"] != merged["Contig_suffix"])
+        (merged.loc[same_contig, "Location_suffix"].abs() -
+         merged.loc[same_contig, "Location_prefix"].abs()).abs() + k + 2 * g)
+    different_contig = has_both & (merged["Contig_prefix"]
+                                   != merged["Contig_suffix"])
     merged.loc[different_contig, "distance"] = "ContigsDifferent"
 
     # Compute "Difference" for numeric distances
     numeric_mask = pd.to_numeric(merged["distance"], errors="coerce").notna()
     merged.loc[numeric_mask, "Difference"] = (
-        merged.loc[numeric_mask, "distance"].astype(float)
-        - merged.loc[numeric_mask, "length"]
-    )
+        merged.loc[numeric_mask, "distance"].astype(float) -
+        merged.loc[numeric_mask, "length"])
 
     # If the group has only one GeneID, pick from either side
-    merged["GeneID"] = merged["GeneID_prefix"].combine_first(merged["GeneID_suffix"])
+    merged["GeneID"] = merged["GeneID_prefix"].combine_first(
+        merged["GeneID_suffix"])
 
     # Final DataFrame with consistent columns, built in one pass
     result = pd.DataFrame({
-        "GenomeID": merged["genomeID"],
-        "GeneID": merged["GeneID"],
-        "PrefixID": merged["kmerID_prefix"],
-        "SuffixID": merged["kmerID_suffix"],
-        "PrefixContig": merged["Contig_prefix"],
-        "SuffixContig": merged["Contig_suffix"],
-        "Contig": merged["Contig_prefix"].combine_first(merged["Contig_suffix"]),
-        "Distance": merged["distance"],
-        "Difference": merged["Difference"],
-        "PrefixLocation": merged["Location_prefix"],
-        "SuffixLocation": merged["Location_suffix"],
+        "GenomeID":
+        merged["genomeID"],
+        "GeneID":
+        merged["GeneID"],
+        "PrefixID":
+        merged["kmerID_prefix"],
+        "SuffixID":
+        merged["kmerID_suffix"],
+        "PrefixContig":
+        merged["Contig_prefix"],
+        "SuffixContig":
+        merged["Contig_suffix"],
+        "Contig":
+        merged["Contig_prefix"].combine_first(merged["Contig_suffix"]),
+        "Distance":
+        merged["distance"],
+        "Difference":
+        merged["Difference"],
+        "PrefixLocation":
+        merged["Location_prefix"],
+        "SuffixLocation":
+        merged["Location_suffix"],
     })
 
     return result
@@ -105,6 +119,7 @@ def process_group_wrapper(args):
     logger.info(f"Processing group: {name}")
     return calculate_distances(group, k, g)
 
+
 def gzip_file_in_place(file_path):
     """
     Gzip a file in-place where file_path already has .gz extension.
@@ -114,37 +129,52 @@ def gzip_file_in_place(file_path):
     """
     # Create temporary name for the uncompressed file
     base_path = file_path.removesuffix('.gz')
-    
+
     # Rename the original uncompressed file to remove .gz extension
     os.rename(file_path, base_path)
-    
+
     # Compress the file
     with open(base_path, 'rb') as f_in:
         with gzip.open(file_path, 'wb') as f_out:
             shutil.copyfileobj(f_in, f_out)
-    
+
     # Remove the uncompressed file
     os.remove(base_path)
     logger.info(f"Successfully compressed {base_path} to {file_path}")
 
-# Example usage:
-# gzip_file_in_place("output.tsv.gz")
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Compute prefix-suffix k-mer distances via merging, writing results incrementally."
+        description=
+        "Compute prefix-suffix k-mer distances via merging, writing results incrementally."
     )
-    parser.add_argument("-i", "--input", required=True,
+    parser.add_argument("-i",
+                        "--input",
+                        required=True,
                         help="Input BWA FastMap TSV/CSV (gzipped ok).")
-    parser.add_argument("-o", "--output", required=True,
+    parser.add_argument("-o",
+                        "--output",
+                        required=True,
                         help="Output TSV for distance data.")
-    parser.add_argument("-g", "--gap-distance", type=int, required=True,
+    parser.add_argument("-g",
+                        "--gap-distance",
+                        type=int,
+                        required=True,
                         help="Gap distance G.")
-    parser.add_argument("-k", "--kmer-length", type=int, required=True,
+    parser.add_argument("-k",
+                        "--kmer-length",
+                        type=int,
+                        required=True,
                         help="K-mer length.")
-    parser.add_argument("-t", "--threads", type=int, default=1,
+    parser.add_argument("-t",
+                        "--threads",
+                        type=int,
+                        default=1,
                         help="Number of worker processes.")
-    parser.add_argument("-v", "--verbose", action="count", default=0,
+    parser.add_argument("-v",
+                        "--verbose",
+                        action="count",
+                        default=0,
                         help="Increase verbosity (-v, -vv, etc.).")
     args = parser.parse_args()
 
@@ -168,29 +198,24 @@ def main():
         "Location": "Int64"
     }
     usecols = ["genomeID", "kmerID", "Contig", "Location"]
-    df = pd.read_csv(
-        args.input,
-        sep="\t",
-        dtype=dtype_spec,
-        na_values=["Null", "None"],
-        usecols=usecols
-    )
+    df = pd.read_csv(args.input,
+                     sep="\t",
+                     dtype=dtype_spec,
+                     na_values=["Null", "None"],
+                     usecols=usecols)
     logger.debug("Input TSV read successfully.")
 
     # Precompute columns: GeneID, KmerType, length
     df["GeneID"] = df["kmerID"].str.extract(r"(.+?-len\d+)", expand=False)
-    df["KmerType"] = np.where(df["kmerID"].str.contains("prefix"), "prefix", "suffix")
-    df["length"] = (
-        df["GeneID"]
-        .str.split("-")
-        .str[-1]
-        .str.replace("len", "", regex=False)
-        .astype("Int64")
-    )
+    df["KmerType"] = np.where(df["kmerID"].str.contains("prefix"), "prefix",
+                              "suffix")
+    df["length"] = (df["GeneID"].str.split("-").str[-1].str.replace(
+        "len", "", regex=False).astype("Int64"))
 
     # Drop rows missing essential fields
     df.dropna(subset=["kmerID", "GeneID", "Location"], inplace=True)
-    logger.debug("Computed GeneID, KmerType, length; dropped invalid rows if any.")
+    logger.debug(
+        "Computed GeneID, KmerType, length; dropped invalid rows if any.")
 
     # Group by GeneID
     # (If extremely large # of groups, consider chunking or partial grouping)
@@ -221,18 +246,25 @@ def main():
             open(args.output, "w", encoding="utf-8") as out_f:
 
         # Using imap for incremental results
-        for i, result_df in enumerate(pool.imap(process_group_wrapper, group_args, chunksize=50)):
+        for i, result_df in enumerate(
+                pool.imap(process_group_wrapper, group_args, chunksize=50)):
             if result_df.empty:
                 continue  # skip entirely empty results
 
             if first_chunk:
                 # Write header once
-                result_df.to_csv(out_f, sep="\t", index=False, columns=out_cols)
+                result_df.to_csv(out_f,
+                                 sep="\t",
+                                 index=False,
+                                 columns=out_cols)
                 first_chunk = False
             else:
                 # Append without header
-                result_df.to_csv(out_f, sep="\t", index=False, columns=out_cols, header=False)
-
+                result_df.to_csv(out_f,
+                                 sep="\t",
+                                 index=False,
+                                 columns=out_cols,
+                                 header=False)
 
     if args.output.endswith('.gz'):
         logger.info(f"Compressing output file: {args.output}")

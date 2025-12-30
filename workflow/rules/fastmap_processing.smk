@@ -44,11 +44,11 @@ rule fastmap_distances:
     shell:
         """
         {params.script} \\
-        -i {input} \\
-        -o {output} \\
-        -k {params.kmer_length} \\
-        -g {params.gap_distance} \\
-        -vvv
+            -i {input} \\
+            -o {output} \\
+            -k {params.kmer_length} \\
+            -g {params.gap_distance} \\
+            -vv
         """
 
 

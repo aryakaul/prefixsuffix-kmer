@@ -7,5 +7,6 @@ dependencies:
   - loguru
   - seaborn
   - python-duckdb
+  - psutil
   - pip:
     - dbscan1d

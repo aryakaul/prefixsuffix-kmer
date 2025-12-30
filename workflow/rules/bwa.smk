@@ -6,10 +6,6 @@ checkpoint make_bwaidx:
     params:
         script=Path(workflow.basedir) / "scripts/build_bwaindex_fof",
         samplesperidx=config["batch_size"],
-    # resources:
-    # slurm_partition="medium",
-    # runtime="7186", # 4.99 days
-    # mem="10G",
     conda:
         "../envs/bwamem.yml"
     shell:

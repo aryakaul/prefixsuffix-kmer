@@ -8,6 +8,7 @@ def get_time(wildcards, attempt):
     else:
         return None
 
+
 def get_memory(wildcards, attempt):
     if attempt == 1:
         return "50gb"
@@ -35,7 +36,7 @@ checkpoint cluster_dists:
     resources:
         runtime=get_time,
         mem="100gb",
-        cpus_per_task=12
+        cpus_per_task=12,
     shell:
         """
         mkdir -p {output}
