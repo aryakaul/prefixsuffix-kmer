@@ -1,0 +1,806 @@
+#!/usr/bin/env python
+
+import duckdb
+import scipy.signal
+import numpy as np
+import gzip
+from loguru import logger
+import matplotlib.pyplot as plt
+import os
+import re
+import uuid
+import seaborn as sns
+from matplotlib.collections import PathCollection
+import glob
+import pandas as pd
+import sys
+import argparse
+import tempfile
+import concurrent.futures
+import matplotlib.ticker as ticker
+import gc
+
+
+def process_gene(args):
+    gene_id, peak_params, output_dir, remove_outliers, db_file = args
+
+    # Set up logging in the child process
+    logger.remove()
+    logger.add(sys.stderr, level="INFO")
+
+    try:
+        # Connect to the persistent DuckDB database
+        con = duckdb.connect(database=db_file, read_only=True)
+
+        # Use a parameterized query to safely include gene_id
+        query = "SELECT * FROM gene_data WHERE GeneID = ?"
+        df = con.execute(query, [gene_id]).df()
+        con.close()  # Close connection immediately after use
+
+        if df.empty:
+            # No data for this gene
+            return gene_id, None, False, None
+
+        # Clean gene_name for file system usage
+        gene_name = gene_id.replace("/", ":").replace("|", ":").replace(
+            "(", ":").replace(")", ":").replace("'", ":")
+
+        # Optimize the dataframe by selecting only needed columns
+        needed_columns = ['Difference', 'filename']
+        if set(needed_columns).issubset(df.columns):
+            df = df[needed_columns].copy()
+
+        df['Bucket'] = df['filename'].apply(lambda x: re.sub(
+            r'-filterdists\.csv\.gz$', '', os.path.basename(x)))
+
+        # Ensure 'Difference' column is numeric
+        df['Difference'] = pd.to_numeric(df['Difference'], errors='coerce')
+
+        # Drop rows with NaN 'Difference' values
+        df = df.dropna(subset=['Difference'])
+
+        if df.empty:
+            logger.info(
+                f"GeneID {gene_id} has no valid 'Difference' data after cleaning."
+            )
+            return gene_id, None, False, None
+
+        # Perform peak-based clustering
+        labels, peaks_info = find_clusters_via_peaks(df['Difference'].values,
+                                                     **peak_params)
+
+        if labels is None:
+            logger.info(
+                f"GeneID {gene_id} did not pass the peak detection criteria.")
+            return gene_id, None, False, None
+
+        # Map the cluster labels back to the dataframe
+        value_to_cluster = {}
+        for i, val in enumerate(df['Difference'].values):
+            value_to_cluster[val] = labels[i]
+
+        df['Cluster'] = df['Difference'].map(value_to_cluster)
+
+        # Check if gene passes the criteria (at least 2 clusters excluding noise)
+        non_noise_clusters = set(labels) - {-1}
+        if len(non_noise_clusters) < 2:
+            logger.info(
+                f"GeneID {gene_id} did not pass the clustering criteria (< 2 clusters)."
+            )
+            return gene_id, None, False, None
+
+        logger.info(
+            f"GeneID {gene_id} passed the clustering criteria with {len(non_noise_clusters)} clusters."
+        )
+
+        # Create output directory
+        outdir = os.path.join(output_dir, "passing_genes", gene_name)
+        os.makedirs(outdir, exist_ok=True)
+
+        # Plotting and saving
+        if remove_outliers:
+            plot_data = df.loc[df["Cluster"] != -1]
+        else:
+            plot_data = df
+
+        create_plot(plot_data,
+                    gene_name,
+                    os.path.join(outdir, f"{gene_name}_clusters.png"),
+                    peaks_info=peaks_info)
+
+        # Save the DataFrame to CSV
+        df.to_csv(os.path.join(outdir, f"{gene_name}_clusters.csv.gz"),
+                  index=False,
+                  compression='gzip')
+
+        # Help garbage collection
+        del df
+        del plot_data
+        gc.collect()
+
+        return gene_id, value_to_cluster, True, gene_name
+
+    except Exception as e:
+        logger.error(f"Error processing gene {gene_id}: {e}")
+        return gene_id, None, False, None
+
+
+def find_clusters_via_peaks(distances,
+                            distance_threshold=800,
+                            prominence=10,
+                            width=None,
+                            height=75,
+                            rel_height=0.5,
+                            min_samples_per_cluster=75):
+    """
+    Find clusters in distance data using scipy.signal.find_peaks.
+    
+    Parameters:
+    - distances: Array of distance values
+    - distance_threshold: Minimum distance between peaks
+    - prominence: Required prominence of peaks
+    - width: Required width of peaks
+    - height: Required height (number of samples) of peaks
+    - rel_height: Relative height for width calculation
+    - min_samples_per_cluster: Minimum samples required for a valid cluster
+    
+    Returns:
+    - labels: Cluster labels for each distance value
+    - peaks_info: Dictionary containing peak information for plotting
+    """
+    try:
+        # Create histogram for peak detection
+        hist_values, bin_edges = np.histogram(distances, bins=100)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+        # Apply Gaussian smoothing for better peak detection
+        smoothed_hist = scipy.ndimage.gaussian_filter1d(hist_values, sigma=1)
+
+        distance_in_bins = max(
+            1, distance_threshold / ((bin_edges[-1] - bin_edges[0]) / 100))
+
+        # Find peaks in the smoothed histogram
+        peaks, properties = scipy.signal.find_peaks(smoothed_hist,
+                                                    distance=distance_in_bins,
+                                                    prominence=prominence,
+                                                    width=width,
+                                                    height=height,
+                                                    rel_height=rel_height)
+
+        if len(peaks) < 2:
+            # Not enough peaks found
+            return None, None
+
+        # Calculate peak boundaries for assigning clusters
+        left_bases = properties['left_bases']
+        right_bases = properties['right_bases']
+        peak_heights = properties['peak_heights']
+
+        # Initialize all points as noise (-1)
+        labels = np.full(len(distances), -1)
+
+        # Assign clusters based on peak regions
+        for i, (left, right) in enumerate(zip(left_bases, right_bases)):
+            left_edge = bin_edges[left]
+            right_edge = bin_edges[
+                right + 1]  # +1 because right_bases is an index to bin_centers
+
+            # Find points in this peak's region
+            mask = (distances >= left_edge) & (distances <= right_edge)
+            points_in_cluster = np.sum(mask)
+
+            # Only create cluster if it has enough points
+            if points_in_cluster >= min_samples_per_cluster:
+                labels[mask] = i
+
+        # Check if we have at least 2 non-noise clusters
+        unique_labels = set(labels)
+        unique_labels.discard(-1)  # Remove noise label
+
+        if len(unique_labels) < 2:
+            return None, None
+
+        # Return labels and peak information for plotting
+        peaks_info = {
+            'bin_centers': bin_centers,
+            'hist_values': hist_values,
+            'smoothed_hist': smoothed_hist,
+            'peaks': peaks,
+            'left_bases': left_bases,
+            'right_bases': right_bases,
+            'bin_edges': bin_edges,
+            'peak_heights': peak_heights
+        }
+
+        return labels, peaks_info
+
+    except Exception as e:
+        logger.error(f"Error in peak detection: {e}")
+        return None, None
+
+
+def create_plot(big_df, gene_id, output, peaks_info=None):
+    # Optimize memory usage by creating a smaller dataframe with just what we need
+    try:
+        # Create a copy of only the necessary columns to reduce memory usage
+        plot_df = big_df[[
+            "Difference", "Cluster"
+        ]].copy() if "Cluster" in big_df.columns else big_df[["Difference"
+                                                              ]].copy()
+
+        if "Cluster" in plot_df.columns:
+            palette_ints = assign_cluster_colors(
+                plot_df["Cluster"].astype(int))
+            plot_df.loc[:, "Cluster"] = plot_df["Cluster"].astype(str)
+            palette = {str(i): palette_ints[i] for i in palette_ints}
+
+        # Set up the figure - add an extra subplot for peak detection visualization
+        if peaks_info:
+            fig, axs = plt.subplots(3,
+                                    1,
+                                    figsize=(5, 6),
+                                    sharex=True,
+                                    gridspec_kw={"height_ratios": [3, 1, 1]})
+        else:
+            fig, axs = plt.subplots(2,
+                                    1,
+                                    figsize=(5, 4),
+                                    sharex=True,
+                                    gridspec_kw={"height_ratios": [3, 1]})
+
+        # Use bins to reduce memory requirements for large datasets
+        bins = min(100, max(20, int(len(plot_df) / 100)))  # Adaptive binning
+        sns.histplot(data=plot_df,
+                     x="Difference",
+                     ax=axs[0],
+                     bins=bins,
+                     fill=False,
+                     color="black")
+
+        axs[0].set_yscale('log')
+        axs[0].set_ylabel("Number of Genomes")
+        axs[0].set_title(f"{gene_id}")
+        axs[0].set_xlabel("")
+        axs[0].yaxis.set_major_formatter(
+            ticker.FuncFormatter(lambda x, pos: "{:,.0f}".format(x) if x == 0
+                                 else "{:,.3g}".format(x / 1000) + "K"))
+
+        # For very large datasets, sample the data to reduce memory usage in plots
+        sample_size = min(5000, len(plot_df))
+        if len(plot_df) > sample_size:
+            plot_sample = plot_df.sample(sample_size, random_state=42)
+        else:
+            plot_sample = plot_df
+
+        if "Cluster" in plot_df.columns:
+            # Second plot (Stripplot)
+            sns.stripplot(
+                x="Difference",
+                data=plot_sample.sort_values(
+                    "Cluster", key=lambda x: x.replace("-1", "A")),
+                hue="Cluster",
+                orient="h",
+                ax=axs[1],
+                alpha=0.8,
+                palette=palette,
+                jitter=True,
+                size=3  # Smaller point size for better performance
+            )
+        else:
+            sns.stripplot(x="Difference",
+                          data=plot_sample,
+                          color="black",
+                          orient="h",
+                          ax=axs[1],
+                          alpha=0.8,
+                          jitter=True,
+                          size=3)
+
+        # For violin plots, use a smaller sample if dataset is very large
+        violin_sample = plot_df
+        if len(plot_df) > 10000:
+            violin_sample = plot_df.sample(10000, random_state=42)
+
+        sns.violinplot(
+            x="Difference",
+            data=violin_sample,
+            fill=True,
+            inner=None,
+            cut=0,
+            color="lightgrey",
+            alpha=0.8,
+            split=False,
+            ax=axs[1],
+        )
+
+        if "Cluster" in plot_df.columns:
+            handles, labels = axs[1].get_legend_handles_labels()
+            if len(axs) == 2:
+                fig.legend(handles,
+                           labels,
+                           title="Cluster",
+                           bbox_transform=fig.transFigure)
+            if axs[1].get_legend() is not None:
+                axs[1].get_legend().remove()
+
+        # Set labels for the second plot
+        axs[1].set_xlabel("" if peaks_info else
+                          "Prefix-suffix distance relative to gene length")
+        axs[1].xaxis.set_major_formatter(
+            ticker.FuncFormatter(lambda x, pos: "{:,.0f}".format(x) if x == 0
+                                 else "{:,.3g}".format(x / 1000) + "kb"))
+        axs[1].set(ylabel=None)  # Remove y-axis label
+        axs[1].set_yticks([])
+
+        # If peak info is available, add a third plot showing peak detection
+        if peaks_info:
+            # Plot the smoothed histogram
+            axs[2].plot(peaks_info['bin_centers'],
+                        peaks_info['smoothed_hist'],
+                        'b-',
+                        label='Smoothed Histogram')
+
+            # Mark the detected peaks
+            peak_x = peaks_info['bin_centers'][peaks_info['peaks']]
+            peak_y = peaks_info['smoothed_hist'][peaks_info['peaks']]
+            axs[2].plot(peak_x, peak_y, 'ro', label='Detected Peaks')
+
+            # Mark the peak boundaries
+            for i, (left, right) in enumerate(
+                    zip(peaks_info['left_bases'], peaks_info['right_bases'])):
+                left_x = peaks_info['bin_centers'][left]
+                right_x = peaks_info['bin_centers'][right]
+                height = peaks_info['peak_heights'][i] * 0.5
+
+                # Draw vertical lines at peak boundaries
+                axs[2].axvline(x=left_x, color='g', linestyle='--', alpha=0.5)
+                axs[2].axvline(x=right_x, color='g', linestyle='--', alpha=0.5)
+
+                # Label the cluster
+                axs[2].text((left_x + right_x) / 2,
+                            height,
+                            f'C{i}',
+                            horizontalalignment='center',
+                            color='red')
+
+            axs[2].set_ylabel("Density")
+            axs[2].set_xlabel("Prefix-suffix distance relative to gene length")
+            axs[2].legend(loc='upper right', fontsize='small')
+
+        sns.despine()
+        sns.despine(left=True, ax=axs[1])
+        if peaks_info:
+            sns.despine(ax=axs[2])
+
+        # Adjust layout and save the figure
+        plt.tight_layout()
+        plt.savefig(output, dpi=300, transparent=True)
+        plt.close(fig)  # Explicitly close the figure
+
+        # Help garbage collection
+        del plot_df
+        del plot_sample
+        if 'violin_sample' in locals():
+            del violin_sample
+        gc.collect()
+
+    except Exception as e:
+        logger.error(f"Error creating plot for {gene_id}: {e}")
+        plt.close('all')  # Close any open figures in case of error
+
+
+def assign_cluster_colors(labels):
+    # Sort unique labels, ensuring -1 is last
+    unique_labels = sorted(set(labels), key=lambda x: (x == -1, x))
+
+    # Get colors from the seaborn muted palette
+    n_colors = len(unique_labels)
+
+    # Generate a color palette with enough distinct colors
+    base_palette = sns.color_palette("muted", as_cmap=False).as_hex()
+    if n_colors > len(base_palette):
+        extended_palette = (base_palette + sns.color_palette(
+            "muted", n_colors - len(base_palette), desat=0.6).as_hex())
+    else:
+        extended_palette = base_palette
+
+    colors = extended_palette[:n_colors]
+
+    # Initialize label_color_map with regular clusters
+    label_color_map = {
+        label: colors[i]
+        for i, label in enumerate(unique_labels) if label != -1
+    }
+
+    # If -1 is in labels, assign it the last color from the palette
+    if -1 in unique_labels:
+        label_color_map[-1] = colors[-1]
+
+    return label_color_map
+
+
+def generate_process_gene_args(db_path, peak_params, output_dir_val,
+                               remove_outliers_val):
+    """
+    Generator function to yield arguments for process_gene.
+    It streams GeneIDs from the database in batches to minimize memory usage.
+    """
+    try:
+        logger.debug(f"Generator connecting to DB: {db_path}")
+        conn = duckdb.connect(database=db_path, read_only=True)
+
+        # Use a more efficient query to get distinct GeneIDs
+        # This might be more efficient with a direct SQL approach
+        query = """
+        SELECT DISTINCT GeneID FROM gene_data
+        ORDER BY GeneID  -- Optional: ordering makes processing more predictable
+        """
+
+        # Check that the table exists
+        try:
+            conn.execute("SELECT 1 FROM gene_data LIMIT 1")
+            logger.debug("gene_data table confirmed to exist by generator.")
+        except duckdb.Error as e:
+            logger.error(f"Generator: 'gene_data' table not found: {e}")
+            conn.close()
+            return  # abort generator early
+
+        # Use a DB-API cursor for streaming
+        cursor = conn.cursor()
+        cursor.execute(query)
+
+        # Larger batch size for better DB performance
+        batch_size = 5000
+        gene_count = 0
+
+        while True:
+            rows = cursor.fetchmany(batch_size)
+            if not rows:
+                break
+
+            for row in rows:
+                gene_id = row[0]
+                gene_count += 1
+                yield (gene_id, peak_params, output_dir_val,
+                       remove_outliers_val, db_path)
+
+        logger.info(f"Generator: Finished yielding {gene_count} GeneIDs.")
+        conn.close()
+
+    except Exception as e:
+        logger.error(f"Exception in generate_process_gene_args: {e}")
+        if 'conn' in locals() and conn:
+            conn.close()
+
+
+def batch_process_genes(args_generator, num_threads, batch_size=10000):
+    """
+    Process genes in batches to limit memory usage.
+    """
+    logger.info(f"Starting batch processing with {num_threads} threads")
+
+    total_processed = 0
+    total_passing = 0
+
+    try:
+        # Process genes in batches
+        batch_args = []
+        for i, args in enumerate(args_generator):
+            batch_args.append(args)
+
+            # When we reach batch size, process the batch
+            if len(batch_args) >= batch_size:
+                logger.info(f"Processing batch of {len(batch_args)} genes")
+                batch_results = process_batch(batch_args, num_threads)
+
+                # Count passing genes
+                passing_genes = sum(1 for res in batch_results
+                                    if res and res[2])
+                total_passing += passing_genes
+                total_processed += len(batch_args)
+
+                logger.info(
+                    f"Batch completed. Genes passed: {passing_genes}/{len(batch_args)}"
+                )
+                logger.info(
+                    f"Total progress: {total_processed} genes processed, {total_passing} passed"
+                )
+
+                # Clear batch for next iteration
+                batch_args = []
+                gc.collect()  # Explicit garbage collection
+
+        # Process any remaining genes
+        if batch_args:
+            logger.info(f"Processing final batch of {len(batch_args)} genes")
+            batch_results = process_batch(batch_args, num_threads)
+            passing_genes = sum(1 for res in batch_results if res and res[2])
+            total_passing += passing_genes
+            total_processed += len(batch_args)
+
+    except Exception as e:
+        logger.error(f"Error in batch processing: {e}")
+
+    return total_processed, total_passing
+
+
+def process_batch(batch_args, num_threads):
+    """
+    Process a batch of genes using a process pool.
+    """
+    results = []
+    with concurrent.futures.ProcessPoolExecutor(
+            max_workers=num_threads) as executor:
+        # Use a reasonable chunksize for better performance
+        chunksize = max(1, min(len(batch_args) // (num_threads * 4), 10))
+        results = list(
+            executor.map(process_gene, batch_args, chunksize=chunksize))
+
+    return results
+
+
+def create_duckdb_with_index(input_dir, output_dir, db_file=None):
+    """
+    Create a DuckDB database with an index on GeneID for faster queries.
+    """
+    if db_file and os.path.exists(db_file):
+        logger.info(f"Using existing database at {db_file}")
+        return db_file
+
+    # Generate a unique database file
+    unique_id = str(uuid.uuid4())
+    temp_db_file = os.path.join(output_dir, f'gene_data_{unique_id}.duckdb')
+
+    try:
+        logger.info(f"Creating new DuckDB database at {temp_db_file}")
+        con_write = duckdb.connect(database=temp_db_file, read_only=False)
+
+        # Find all CSV files
+        csv_pattern = os.path.join(input_dir, "*.csv.gz")
+        csv_files = glob.glob(csv_pattern)
+
+        if not csv_files:
+            logger.error("No CSV files found. Aborting.")
+            con_write.close()
+            return None
+
+        logger.info(f"Found {len(csv_files)} CSV files to process")
+
+        # Check for non-empty files
+        non_empty_files = []
+        for file in csv_files:
+            try:
+                with gzip.open(file, 'rt') as f:
+                    header = f.readline()
+                    first_line = f.readline()
+                    if first_line:
+                        non_empty_files.append(file)
+            except Exception as e:
+                logger.warning(f"Error checking file {file}: {e}")
+
+        if not non_empty_files:
+            logger.error("No non-empty CSV files found. Aborting.")
+            con_write.close()
+            return None
+
+        logger.info(f"Processing {len(non_empty_files)} non-empty CSV files")
+
+        # Define column types with minimal memory usage where possible
+        column_types = {
+            'GenomeID': 'VARCHAR',
+            'GeneID': 'VARCHAR',
+            'PrefixID': 'VARCHAR',
+            'SuffixID': 'VARCHAR',
+            'PrefixContig': 'VARCHAR',
+            'SuffixContig': 'VARCHAR',
+            'Contig': 'VARCHAR',
+            'Distance': 'BIGINT',
+            'Difference': 'DOUBLE',
+            'PrefixLocation': 'BIGINT',
+            'SuffixLocation': 'BIGINT',
+        }
+
+        # Process files in chunks to save memory
+        batch_size = 1000  # Adjust based on file sizes and available memory
+
+        for i in range(0, len(non_empty_files), batch_size):
+            batch_files = non_empty_files[i:i + batch_size]
+            logger.info(
+                f"Processing batch of {len(batch_files)} files ({i+1}-{i+len(batch_files)} of {len(non_empty_files)})"
+            )
+
+            try:
+                # Read this batch of CSV files
+                rel = con_write.read_csv(
+                    batch_files,
+                    compression='gzip',
+                    filename=True,
+                    header=True,
+                    sep=',',
+                    dtype=column_types,
+                )
+
+                # For the first batch, create the table; for subsequent batches, append
+                if i == 0:
+                    rel.create('gene_data')
+                else:
+                    rel.insert_into('gene_data')
+
+                # Force a checkpoint to write data to disk
+                con_write.execute("CHECKPOINT")
+
+            except Exception as e:
+                logger.error(
+                    f"Error processing batch {i//batch_size + 1}: {e}")
+
+        # Create an index on GeneID for faster queries
+        logger.info("Creating index on GeneID column")
+        con_write.execute(
+            "CREATE INDEX IF NOT EXISTS gene_id_idx ON gene_data(GeneID)")
+
+        # Final checkpoint
+        con_write.execute("CHECKPOINT")
+        con_write.close()
+
+        logger.info(f"DuckDB database created successfully at {temp_db_file}")
+        return temp_db_file
+
+    except Exception as e:
+        logger.error(f"Error creating DuckDB database: {e}")
+        if os.path.exists(temp_db_file):
+            try:
+                os.remove(temp_db_file)
+            except:
+                pass
+        return None
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Gene clustering using scipy.signal.find_peaks")
+    parser.add_argument(
+        "-i",
+        "--input_dir",
+        type=str,
+        required=True,
+        help="Directory containing input CSV files.",
+    )
+    parser.add_argument(
+        "-o",
+        "--output_dir",
+        type=str,
+        required=True,
+        help="Directory to store output files.",
+    )
+    parser.add_argument(
+        "-d",
+        "--duckdb",
+        type=str,
+        required=False,
+        help="Path to duckdb if it exists already.",
+    )
+    parser.add_argument(
+        "--distance_threshold",
+        type=float,
+        default=800,
+        help=
+        "Minimum distance (in data units) between peaks for scipy.signal.find_peaks",
+    )
+    parser.add_argument(
+        "--prominence",
+        type=float,
+        default=10,
+        help="Required prominence of peaks for scipy.signal.find_peaks",
+    )
+    parser.add_argument(
+        "--width",
+        type=float,
+        default=None,
+        help="Required width of peaks for scipy.signal.find_peaks",
+    )
+    parser.add_argument(
+        "--height",
+        type=float,
+        default=75,
+        help="Required height (count) of peaks for scipy.signal.find_peaks",
+    )
+    parser.add_argument(
+        "--rel_height",
+        type=float,
+        default=0.5,
+        help="Relative height for width calculation in scipy.signal.find_peaks",
+    )
+    parser.add_argument(
+        "--min_samples_per_cluster",
+        type=int,
+        default=75,
+        help="Minimum samples required for a valid cluster",
+    )
+    parser.add_argument(
+        "-j",
+        "--threads",
+        type=int,
+        default=4,
+        help="Number of threads to use for parallel gene processing.",
+    )
+    parser.add_argument(
+        "--remove_outliers",
+        action="store_true",
+        help="Whether to remove or keep outliers in plots.",
+    )
+    parser.add_argument("--batch_size",
+                        type=int,
+                        default=5000,
+                        help="Number of genes to process in each batch.")
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help=
+        "Increase verbosity level. Can be specified multiple times for more detailed logs.",
+    )
+
+    args = parser.parse_args()
+
+    # Set up logging
+    logger.remove()
+    if args.verbose == 0:
+        logger.add(sys.stderr, level="WARNING")
+    elif args.verbose == 1:
+        logger.add(sys.stderr, level="INFO")
+    else:
+        logger.add(sys.stderr, level="DEBUG")
+
+    # Create output directories
+    os.makedirs(os.path.join(args.output_dir, "all_gene_dists"), exist_ok=True)
+    passinggenesdir = os.path.join(args.output_dir, "passing_genes")
+    os.makedirs(passinggenesdir, exist_ok=True)
+
+    # Create or use existing DuckDB database
+    db_file = create_duckdb_with_index(args.input_dir, args.output_dir,
+                                       args.duckdb)
+    if not db_file:
+        logger.error("Failed to create or access DuckDB database. Exiting.")
+        sys.exit(1)
+
+    # Prepare peak detection parameters
+    peak_params = {
+        'distance_threshold': args.distance_threshold,
+        'prominence': args.prominence,
+        'width': args.width,
+        'height': args.height,
+        'rel_height': args.rel_height,
+        'min_samples_per_cluster': args.min_samples_per_cluster
+    }
+
+    # Generate arguments for gene processing
+    args_generator = generate_process_gene_args(db_file, peak_params,
+                                                args.output_dir,
+                                                args.remove_outliers)
+
+    # Process genes in batches
+    total_processed, total_passing = batch_process_genes(
+        args_generator, args.threads, args.batch_size)
+
+    # Report results
+    if total_processed == 0:
+        logger.info("No genes were processed.")
+    else:
+        passing_percentage = (total_passing / total_processed) * 100
+        failing_percentage = (
+            (total_processed - total_passing) / total_processed) * 100
+        logger.info(
+            f"Passing genes: {total_passing} ({passing_percentage:.2f}%)\n"
+            f"Failing genes: {total_processed - total_passing} ({failing_percentage:.2f}%)"
+        )
+
+    logger.success("Processing complete.")
+
+    # Don't remove the database by default - it could be reused
+    logger.info(f"Database file kept at: {db_file}")
+    logger.info(f"To delete the database file manually: rm {db_file}")
+
+
+if __name__ == "__main__":
+    main()

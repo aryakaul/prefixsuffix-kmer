@@ -1,0 +1,378 @@
+#!/usr/bin/env python
+
+import os
+import glob
+import pandas as pd
+from pandas.api.types import CategoricalDtype
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import matplotlib.ticker as ticker
+from loguru import logger
+import sys
+import argparse
+from typing import List, Tuple
+import time
+from pathlib import Path
+import concurrent.futures
+
+
+# ---------- Helpers for clean tick formatting ----------
+
+def _format_count_K(x, pos=None):
+    """Format counts: show in thousands (K) or millions (M), clean decimals, handle negatives."""
+    if x is None:
+        return ""
+    abs_x = abs(x)
+    sign = "-" if x < 0 else ""
+
+    if abs_x >= 1e6:
+        val = abs_x / 1e6
+        text = f"{val:.2f}".rstrip("0").rstrip(".")
+        return f"{sign}{text}M"
+    elif abs_x >= 1e3:
+        val = abs_x / 1e3
+        text = f"{val:.2f}".rstrip("0").rstrip(".")
+        return f"{sign}{text}K"
+    else:
+        return f"{sign}{int(abs_x)}"
+
+
+def _format_kb(x, pos=None):
+    """Format genomic positions: use kb if <1 Mb, otherwise Mb. Clean decimals, handle negatives."""
+    if x is None:
+        return ""
+    abs_x = abs(x)
+    sign = "-" if x < 0 else ""
+
+    if abs_x >= 1e6:
+        val = abs_x / 1e6
+        text = f"{val:.2f}".rstrip("0").rstrip(".")
+        return f"{sign}{text} Mb"
+    elif abs_x >= 1e3:
+        val = abs_x / 1e3
+        text = f"{val:.2f}".rstrip("0").rstrip(".")
+        return f"{sign}{text} kb"
+    else:
+        return f"{sign}{int(abs_x)}"
+
+
+# ---------- Core plotting ----------
+
+def create_optimized_plot(csv_path: str,
+                          gene_id: str,
+                          output_path: str,
+                          max_plot_samples: int = 10000) -> bool:
+    """
+    Create a two-panel plot:
+      • Top: histogram (log y) of 'Difference'
+      • Bottom: single baseline with an overall violin (background)
+        and cluster-colored points overlaid on the SAME y-axis.
+    The two panels SHARE the same x-axis (identical limits).
+    """
+    try:
+        # Stream in chunks to cap memory and optionally downsample
+        chunk_size = min(max_plot_samples, 50_000)
+        chunks = []
+        total_rows = 0
+
+        for chunk in pd.read_csv(csv_path, compression='gzip', chunksize=chunk_size):
+            total_rows += len(chunk)
+            chunks.append(chunk)
+            if total_rows >= max_plot_samples:
+                break
+
+        if not chunks:
+            logger.warning(f"No valid data found in {csv_path}")
+            return False
+
+        plot_df = pd.concat(chunks, ignore_index=True)
+
+        # Downsample again if still big
+        # if len(plot_df) > max_plot_samples:
+            # plot_df = plot_df.sample(n=max_plot_samples, random_state=42)
+
+        # Coerce and sanitize
+        plot_df['Difference'] = pd.to_numeric(plot_df['Difference'], errors='coerce').astype(np.float32)
+        plot_df = plot_df.replace([np.inf, -np.inf], np.nan).dropna(subset=['Difference'])
+
+        if plot_df.empty:
+            logger.warning(f"All 'Difference' values are NaN/inf for {csv_path}")
+            return False
+
+        has_clusters = 'Cluster' in plot_df.columns
+        if has_clusters:
+            # Keep as categorical for stable ordering
+            if not isinstance(plot_df['Cluster'].dtype, CategoricalDtype):
+                plot_df['Cluster'] = plot_df['Cluster'].astype('category')
+
+        # Constant y category to overlay violin and points on the SAME baseline
+        plot_df['__row__'] = 'All'
+
+        # Sampling only for the POINTS (keep violin on full set for a smooth shape)
+        sample_n = min(max_plot_samples, len(plot_df))
+        points_df = plot_df.sample(n=sample_n, random_state=42) if len(plot_df) > sample_n else plot_df
+
+        # Compute x-limits once and enforce them on BOTH axes to guarantee sharing
+        # x_min = np.nanmin(plot_df['Difference'].to_numpy())
+        # x_max = np.nanmax(plot_df['Difference'].to_numpy())
+        # if not np.isfinite(x_min) or not np.isfinite(x_max) or x_min == x_max:
+            # Fallback in degenerate cases
+            # x_min, x_max = x_min - 1.0, x_max + 1.0
+
+        # --- Figure / axes (sharex enforces the same x scale) ---
+        fig, (ax1, ax2) = plt.subplots(
+            2, 1, figsize=(2.5, 1.5),
+            gridspec_kw={'height_ratios': [3, 1]},
+            sharex=True
+        )
+        plt.subplots_adjust(hspace=0.08)
+
+        # --- Top: histogram with log y ---
+        n_bins = min(100, max(20, int(np.sqrt(len(plot_df)))))
+        sns.histplot(
+            data=plot_df,
+            x='Difference',
+            bins=n_bins,
+            stat='count',
+            fill=False,
+            color='black',
+            ax=ax1
+        )
+        # ax1.set_title(f'{gene_id}')
+        ax1.set_title('')
+        ax1.set_xlabel('')
+        ax1.set_ylabel('Number of Genomes')
+        ax1.set_yscale('log')
+        ax1.yaxis.set_major_formatter(ticker.FuncFormatter(_format_count_K))
+
+        # Lock x-limits for both (sharex=True makes ax2 follow, but we set explicitly too)
+        # ax1.set_xlim(x_min, x_max)
+
+        # --- Bottom: overall violin (background) + cluster-colored points on SAME y ---
+        # Background violin using ALL rows (smooth density). No legend here.
+        sns.violinplot(
+            data=plot_df,
+            x='Difference',
+            y='__row__',
+            orient='h',
+            inner=None,
+            cut=0,
+            linewidth=0,
+            color='lightgrey',
+            alpha=0.55,
+            ax=ax2
+        )
+
+        if has_clusters and plot_df['Cluster'].nunique() > 1:
+            # Stable legend order (place '-1' at end if present)
+            cats = list(plot_df['Cluster'].cat.categories)
+            cluster_order = sorted(cats, key=lambda c: (str(c) == '-1', str(c)))
+
+            # Cluster-colored points; NO dodge so they sit on the same y as the violin
+            sp = sns.stripplot(
+                data=points_df,
+                x='Difference',
+                y='__row__',
+                hue='Cluster',
+                hue_order=cluster_order,
+                orient='h',
+                dodge=False,
+                # jitter=0.28,
+                # size=2,
+                alpha=0.35,
+                ax=ax2
+            )
+
+            # Consolidate legend on the right
+            handles, labels = ax2.get_legend_handles_labels()
+            if handles:
+                fig.legend(
+                    handles, labels,
+                    title='Cluster',
+                    bbox_to_anchor=(0.98, 0.8),
+                    loc='upper right',
+                    borderaxespad=0.2,
+                    frameon = True
+                )
+            if ax2.get_legend() is not None:
+                ax2.get_legend().remove()
+        else:
+            # No clusters (or single), draw black points only
+            sns.stripplot(
+                data=points_df,
+                x='Difference',
+                y='__row__',
+                orient='h',
+                dodge=False,
+                # jitter=0.28,
+                # size=2,
+                alpha=0.95,
+                color='black',
+                ax=ax2
+            )
+
+        # Cosmetics for the bottom axis
+        ax2.set_xlabel('Prefix-suffix distance\nrelative to gene length')
+        ax2.set_ylabel('')
+        ax2.set_yticks([])  # keep the left spine visible, but hide the category tick
+        ax2.xaxis.set_major_formatter(ticker.FuncFormatter(_format_kb))
+
+        # Keep left spines (so the vertical bar is visible); remove only top/right
+        sns.despine(fig=fig, right=True, top=True, left=False, bottom=False)
+        sns.despine(ax=ax2, left=True)
+
+        # Save
+        dpi = 300
+        fig.savefig(
+            output_path,
+            dpi=dpi,
+            bbox_inches='tight',
+            facecolor='white',
+            transparent=False
+        )
+        plt.close(fig)
+        return True
+
+    except Exception as e:
+        logger.error(f"Error creating plot for {gene_id}: {e}")
+        return False
+
+
+# ---------- Batch processing ----------
+
+def process_csv_file(csv_path: str, output_dir: str, max_samples: int) -> Tuple[str, bool]:
+    try:
+        file_stem = Path(csv_path).stem.replace('.csv', '')
+        gene_name = file_stem.replace('_clusters', '').replace(':', '_').replace('|', '_')
+        plot_filename = f"{gene_name}_plot.png"
+        plot_path = os.path.join(output_dir, plot_filename)
+        success = create_optimized_plot(csv_path, gene_name, plot_path, max_samples)
+        return csv_path, success
+    except Exception as e:
+        logger.error(f"Error processing {csv_path}: {e}")
+        return csv_path, False
+
+
+def find_csv_files(input_dir: str, pattern: str = "**/*.csv.gz") -> List[str]:
+    search_path = os.path.join(input_dir, pattern)
+    csv_files = glob.glob(search_path, recursive=True)
+
+    valid_files = []
+    for file in csv_files:
+        try:
+            if os.path.getsize(file) > 100:
+                valid_files.append(file)
+        except OSError:
+            logger.warning(f"Could not check size of {file}")
+
+    return sorted(valid_files)
+
+
+def batch_process_files(csv_files: List[str], output_dir: str, max_samples: int, num_threads: int = 4) -> Tuple[int, int]:
+    total_files = len(csv_files)
+    successful = 0
+    failed = 0
+
+    logger.info(f"Processing {total_files} CSV files with {num_threads} threads")
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
+        future_to_file = {
+            executor.submit(process_csv_file, csv_file, output_dir, max_samples): csv_file
+            for csv_file in csv_files
+        }
+
+        for i, future in enumerate(concurrent.futures.as_completed(future_to_file)):
+            csv_file = future_to_file[future]
+            try:
+                file_path, success = future.result()
+                if success:
+                    successful += 1
+                    logger.debug(f"Successfully processed: {os.path.basename(file_path)}")
+                else:
+                    failed += 1
+                    logger.warning(f"Failed to process: {os.path.basename(file_path)}")
+
+                if (i + 1) % 50 == 0 or (i + 1) == total_files:
+                    logger.info(
+                        f"Progress: {i+1}/{total_files} files processed "
+                        f"({successful} successful, {failed} failed)"
+                    )
+
+            except Exception as e:
+                failed += 1
+                logger.error(f"Error processing {csv_file}: {e}")
+
+    return successful, failed
+
+
+# ---------- CLI ----------
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Generate plots from gene clustering CSV files recursively found in a directory"
+    )
+    parser.add_argument("-i", "--input_dir", type=str, required=True,
+                        help="Directory to search for CSV.gz files recursively")
+    parser.add_argument("-o", "--output_dir", type=str, required=True,
+                        help="Directory to save generated plots")
+    parser.add_argument("--max_samples", type=int, default=50000,
+                        help="Maximum number of samples to load for plotting. Data will be downsampled to this size if larger.")
+    parser.add_argument("-j", "--threads", type=int, default=4,
+                        help="Number of threads for parallel processing")
+    parser.add_argument("--pattern", type=str, default="**/*.csv.gz",
+                        help="File pattern to search for (default: **/*.csv.gz)")
+    parser.add_argument("-v", "--verbose", action="count", default=0,
+                        help="Increase verbosity level")
+
+    args = parser.parse_args()
+
+    # Logging
+    logger.remove()
+    if args.verbose == 0:
+        logger.add(sys.stderr, level="WARNING")
+    elif args.verbose == 1:
+        logger.add(sys.stderr, level="INFO")
+    else:
+        logger.add(sys.stderr, level="DEBUG")
+
+    if not os.path.exists(args.input_dir):
+        logger.error(f"Input directory does not exist: {args.input_dir}")
+        sys.exit(1)
+
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    logger.info(f"Searching for CSV files in {args.input_dir}")
+    csv_files = find_csv_files(args.input_dir, args.pattern)
+
+    if not csv_files:
+        logger.error(f"No CSV.gz files found in {args.input_dir}")
+        sys.exit(1)
+
+    logger.info(f"Found {len(csv_files)} CSV files to process")
+
+    start_time = time.time()
+    successful, failed = batch_process_files(
+        csv_files, args.output_dir, args.max_samples, args.threads
+    )
+    elapsed = time.time() - start_time
+
+    total = len(csv_files)
+    success_rate = (successful / total * 100) if total else 0
+    speed = total / elapsed if elapsed > 0 else 0
+
+    logger.success(
+        f"Processing completed in {elapsed:.2f} seconds:\n"
+        f"  Total files: {total}\n"
+        f"  Successful: {successful} ({success_rate:.1f}%)\n"
+        f"  Failed: {failed} ({100-success_rate:.1f}%)\n"
+        f"  Speed: {speed:.2f} files/second"
+    )
+    if failed > 0:
+        logger.warning(f"{failed} files failed to process. Check logs for details.")
+    logger.info(f"Plots saved to: {args.output_dir}")
+
+
+if __name__ == "__main__":
+    main()
+
