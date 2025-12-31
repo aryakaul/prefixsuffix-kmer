@@ -3,7 +3,7 @@
 <p>
 A scalable workflow for detecting differential genomic distances through rapid k-mer matching. Query sequences are analyzed by extracting prefix and suffix k-mers, which are then mapped across large genome collections to identify regions with unexpected distances between sequence boundaries.
 
-[![Tests](https://github.com/aryakaul/prefixsuffix-kmer/actions/workflows/main.yaml/badge.svg)](https://github.com/aryakaul/prefixsuffix-kmer/actions/workflows/main.yaml)
+<!--[![Tests](https://github.com/aryakaul/prefixsuffix-kmer/actions/workflows/main.yaml/badge.svg)](https://github.com/aryakaul/prefixsuffix-kmer/actions/workflows/main.yaml)-->
 
 <!--For more information, see the <a href="LOLSOON">associated paper</a>.-->
 </p><br/>
