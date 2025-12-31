@@ -198,6 +198,10 @@ def main():
     logger.info("Reading input cluster csv")
 
     df_all = pd.read_csv(args.inputcsv)
+    num_clusters = len(df_all['Cluster'].unique())
+    if num_clusters > args.maxgenomes:
+        logger.warning(f"Requested genomes: {args.maxgenomes} is less than the number of clusters {num_clusters}. Using {num_clusters} instead")
+        args.maxgenomes = num_clusters
     if args.metadata:
         if args.allthebact:
             hqdf = df_all.loc[df_all['GenomeID'].isin(

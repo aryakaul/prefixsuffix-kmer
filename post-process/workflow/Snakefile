@@ -18,6 +18,8 @@ include: "rules/region_decompression.smk"
 include: "rules/genome_decompression.smk"
 include: "rules/tree.smk"
 include: "rules/align.smk"
+include: "rules/deletion_or_insertion_mgerecords.smk"
+#include: "rules/deletion_or_insertion.smk"
 
 
 ## WILDCARDS CONSTRAINS
@@ -26,22 +28,61 @@ wildcard_constraints:
     batch=r"[a-zA-Z0-9_-]+",
 
 
+localrules:
+    downsample_annotdf,
+    downsample_df,
+    build_tinyfilelist,
+    extract_internal_kmers,
+    find_passing_genes,
+    select_buckets,
+    tinydownsample_df,
+    analyze_bwafastmap
+
 rule all:
     input:
-        expand(
-            fn_downsampled_df("{batch}", "{genebatch}", "{passinggene}"),
-            zip,
-            batch=get_passinggenes_batches(),
-            genebatch=get_passinggenes_genebatches(),
-            passinggene=get_passinggenes(),
-        ),
-        expand(
-            fn_downsample_nwk("{batch}", "{genebatch}", "{passinggene}"),
-            zip,
-            batch=get_passinggenes_batches(),
-            genebatch=get_passinggenes_genebatches(),
-            passinggene=get_passinggenes(),
-        ),
+        get_filtered_gene_outputs,
+        #fn_passinggenes_agg(),
+        #expand(
+            #fn_downsampled_df("{batch}", "{genebatch}", "{passinggene}"),
+            #zip,
+            #batch=get_passinggenes_batches(),
+            #genebatch=get_passinggenes_genebatches(),
+            #passinggene=get_passinggenes(),
+        #),
+        #expand(
+            #fn_downsample_nwk("{batch}", "{genebatch}", "{passinggene}"),
+            #zip,
+            #batch=get_passinggenes_batches(),
+            #genebatch=get_passinggenes_genebatches(),
+            #passinggene=get_passinggenes(),
+        #),
+        #expand(
+            #fn_itoltree("{batch}", "{genebatch}", "{passinggene}"),
+            #zip,
+            #batch=get_passinggenes_batches(),
+            #genebatch=get_passinggenes_genebatches(),
+            #passinggene=get_passinggenes(),
+        #),
+        #expand(
+            #fn_mincuts("{batch}", "{genebatch}", "{passinggene}"),
+            #zip,
+            #batch=get_passinggenes_batches(),
+            #genebatch=get_passinggenes_genebatches(),
+            #passinggene=get_passinggenes(),
+        #),
+        #expand(
+            #fn_passinggenes_agg("{batch}", "{genebatch}"),
+            #zip,
+            #batch=get_passinggenes_batches(),
+            #genebatch=get_passinggenes_genebatches(),
+        #),
+        #expand(
+        #fn_blast_done("{batch}", "{genebatch}", "{passinggene}"),
+        #zip,
+        #batch=get_passinggenes_batches(),
+        #genebatch=get_passinggenes_genebatches(),
+        #passinggene=get_passinggenes(),
+        #),
         #expand(
         #fn_decompregion_agg("{batch}", "{genebatch}", "{passinggene}"),
         #zip,
@@ -49,31 +90,18 @@ rule all:
         #genebatch=get_passinggenes_genebatches(),
         #passinggene=get_passinggenes(),
         #),
-        expand(
-            fn_itoltree("{batch}", "{genebatch}", "{passinggene}"),
-            zip,
-            batch=get_passinggenes_batches(),
-            genebatch=get_passinggenes_genebatches(),
-            passinggene=get_passinggenes(),
-        ),
-        expand(
-            fn_mincuts("{batch}", "{genebatch}", "{passinggene}"),
-            zip,
-            batch=get_passinggenes_batches(),
-            genebatch=get_passinggenes_genebatches(),
-            passinggene=get_passinggenes(),
-        ),
-        expand(
-            fn_bakta_annot_done("{batch}", "{genebatch}", "{passinggene}"),
-            zip,
-            batch=get_passinggenes_batches(),
-            genebatch=get_passinggenes_genebatches(),
-            passinggene=get_passinggenes(),
-        ),
-        expand(
-            fn_blast_done("{batch}", "{genebatch}", "{passinggene}"),
-            zip,
-            batch=get_passinggenes_batches(),
-            genebatch=get_passinggenes_genebatches(),
-            passinggene=get_passinggenes(),
-        ),
+        #expand(
+        #fn_bakta_annot_done("{batch}", "{genebatch}", "{passinggene}"),
+        #zip,
+        #batch=get_passinggenes_batches(),
+        #genebatch=get_passinggenes_genebatches(),
+        #passinggene=get_passinggenes(),
+        #),
+        #rules.fanout_analysis.output,
+        #expand(
+        #fn_fastmapraw_agg("{batch}", "{genebatch}", "{passinggene}"),
+        #zip,
+        #batch=get_passinggenes_batches(),
+        #genebatch=get_passinggenes_genebatches(),
+        #passinggene=get_passinggenes(),
+        #),

@@ -6,3 +6,6 @@ dependencies:
   - loguru
   - biopython
   - pandas
+  - muscle
+  - pyrodigal
+  - cd-hit

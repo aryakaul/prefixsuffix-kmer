@@ -3,27 +3,33 @@
 ########################
 
 # (1) Directories for individual stages of the workflow
-input_dir:            input
-intermediate_dir:     /home/ak586/baym/projects/prefixsuffix-kmer/manual/sensitivity_analysis/fiverandos/intermediate
-output_dir:           /home/ak586/baym/projects/prefixsuffix-kmer/manual/sensitivity_analysis/fiverandos/output
-previnput_dir:        /n/data1/hms/dbmi/baym/arya/projects/prefixsuffix-kmer/manual/sensitivity_analysis/fiverandos
-previntermediate_dir:     /n/scratch/users/a/ak586/refseq-intermediate-800dist-25minsamp
-prevoutput_dir:           /n/data1/hms/dbmi/baym/arya/data/subset-subset-output-800dist-25minsamp-k26-g4
-conda_dir:            .conda
+
+previnput_dir:        /n/data1/hms/dbmi/baym/arya/projects/prefixsuffix-kmer/input 
+previntermediate_dir:     /n/scratch/users/a/ak586/prefixsuffix-intermediate 
+prevoutput_dir:           /n/scratch/users/a/ak586/prefixsuffix-output-3
+
+intermediate_dir:     /n/scratch/users/a/ak586/prefixsuffix-post-intermediate-3
+output_dir:           /n/scratch/users/a/ak586/prefixsuffix-post-output-3
+
+fastmap_indices: /home/ak586/baym/projects/prefixsuffix-kmer/intermediate/bwa_indices/allthebacteriav2
 
 # (2) Parameters for Snakemake execution
 use_conda:            True # build conda environments automatically by Snakemake
-
-bakta_db:             /n/data1/hms/dbmi/baym/databases/bakta_dbv6/db
+conda_dir:            .conda
 
 ##############
 # PARAMETERS #
 ##############
 
-# (1) General parameters; notes:
-number_genomes:               500
-window_size:                  500
-kmer_length:                  26
+kmer_length:                  27
+num_filter_genomes:           10
+threshold:                    2.0
+
+number_genomes:               300
+window_size:                  200
+flankkb_decompress:           5
 
 number_annotate:              3
 number_matching_decompress:   10000
+
+internal_pad:                 100

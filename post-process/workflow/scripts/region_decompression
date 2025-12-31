@@ -70,6 +70,9 @@ def process_bucket(group, file_mapping, window_size, extraction_dir, middle,
                                             f"Prefix: {prefix}, Suffix: {suffix}"
                                         )
                                         return
+                                    if len(regions) != 1:
+                                        logger.error("Skipping this one for malformed sequence.")
+                                        return
                                     records = []
                                     for start, end in regions:
                                         extracted_seq = record.seq[start:end -
@@ -112,8 +115,10 @@ def get_bounds(loc, seq_len, window):
     logger.debug(f"{loc} being analyzed")
     is_neg = str(loc).startswith("-")
     loc = -loc if is_neg else loc
+    logger.debug(f"Start is max(0, {loc-window})")
     start = max(0, loc - window)
     end = min(loc + window, seq_len)
+    logger.debug(f"End is min({loc+window}, {seq_len})")
     logger.debug(f"Start is now: {start} End is now: {end}.")
 
     # Check for out-of-bounds and log warnings
@@ -150,6 +155,10 @@ def extract_region(seq, loc1, loc2, window, middle):
 
         # Create a single region from the start of the first region to the end of the second region
         regions = [(min(start1, start2), max(end1, end2))]
+
+        if regions[0][1] < regions[0][0]:
+            logger.error("End is smaller than start. Likely a bug with fastmap. Skipping.")
+            return []
 
     logger.debug(f"Regions to extract: {regions}")
     return regions

@@ -44,7 +44,7 @@ endif
 ######################
 
 all: ## Run everything
-	snakemake --cores all $(CONDA_PARAMS) -p --rerun-incomplete $(SNAKEMAKE_PARAM_DIR)
+	snakemake --cores all $(CONDA_PARAMS) -p --rerun-incomplete $(SNAKEMAKE_PARAM_DIR) --keep-going --retries 2
 
 cluster: ## Run everything but on the CLUSTER
 	snakemake $(CONDA_PARAMS) --profile slurmprofile -p --keep-going --rerun-incomplete $(SNAKEMAKE_PARAM_DIR) --executor slurm

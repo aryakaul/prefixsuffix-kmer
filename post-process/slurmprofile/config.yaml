@@ -19,7 +19,10 @@ groups:
   - itol_annottext=attotreegroup
   - minimal_cuts=attotreegroup  
   - bakta_annotation=baktagroup
+  - make_blastidx=blastgroup 
+  - run_blast=blastgroup
 
 group-components:
   - attotreegroup=500
-  - baktagroup=3
+  - baktagroup=2
+  - blastgroup=5000

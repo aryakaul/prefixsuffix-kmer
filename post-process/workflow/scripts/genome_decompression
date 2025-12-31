@@ -13,12 +13,14 @@ import concurrent.futures
 
 
 def process_bucket(group, file_mapping, extraction_dir):
-    bucket = group["Bucket"].iloc[0]
+    bucket = group["Bucket_base"].iloc[0]
     archive_file = file_mapping.get(bucket)
 
     if not archive_file:
-        logger.warning(f"No archive file found for Bucket: {bucket}")
-        return
+        logger.debug(f"Bucket read: {bucket}")
+        # logger.debug(f"archive_file: {file_mapping}")
+        logger.error(f"No archive file found for Bucket: {bucket}")
+        sys.exit(2)
 
     # Create a set of unique genome filenames to decompress
     genome_set = set(group["GenomeID"])
@@ -112,9 +114,18 @@ def main():
             bucket_name = os.path.basename(line.strip()).split(".tar.xz")[0]
             file_mapping[bucket_name] = str(line.strip())
 
-    df['Bucket'] = df['filename'].str.extract(
-        r'.*/(.*)_.*-filterdists\.csv\.gz$', expand=False)
-    grouped = df.groupby("Bucket")
+    # df['Bucket'] = df['filename'].str.extract(
+        # r'.*/(atb.*)_.*-filterdists\.csv\.gz$', expand=False
+    # )
+
+    # print(df)
+    # df['Bucket'] = df['filename'].str.extract(
+        # r'.*/(.*)_.*-filterdists\.csv\.gz$', expand=False)
+    # print(df['Bucket'])
+    # df['Bucket_base'] = df['Bucket'].str
+    df['Bucket_base'] = df['Bucket'].str.replace(r'_[^_]*$', '', regex=True)
+
+    grouped = df.groupby("Bucket_base")
     with multiprocessing.Pool() as pool:
         pool.map(
             process_bucket_group_wrapper,

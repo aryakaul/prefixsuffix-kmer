@@ -1,9 +1,52 @@
-rule downsample_df:
+rule tinydownsample_df:
+    output:
+        output_csv=fn_tinydownsampled_df("{batch}", "{genebatch}", "{passinggene}"),
     input:
         clustercsv=fn_cluster_csv("{batch}", "{genebatch}", "{passinggene}"),
         fof=fn_fof("{batch}"),
+    conda:
+        "../envs/pandas.yml"
+    params:
+        numbergenomes=config["num_filter_genomes"],
+        metadata661k=f"{dir_intermediate()}"
+        + "/../supp_data/File4_QC_characterisation_661K.txt",
+        metadataallthebact=Path(workflow.basedir)
+        / "../supp_data/hq_set.sample_list.txt.gz",
+        script=Path(workflow.basedir) / "scripts/sample_genomes",
+    shell:
+        """
+        mkdir -p $(dirname {output.output_csv})
+        if [ "{wildcards.batch}" = "661k_allsamples" ]; then
+            {params.script} \\
+                -m {params.numbergenomes} \\
+                -i {input.clustercsv} \\
+                -o {output.output_csv} \\
+                -q {params.metadata661k} \\
+                -vvv
+        elif [ "{wildcards.batch}" = "allthebacteriav2" ]; then
+            {params.script} \\
+                -m {params.numbergenomes} \\
+                -i {input.clustercsv} \\
+                -o {output.output_csv} \\
+                -q {params.metadataallthebact} \\
+                -a \\
+                -vvv
+        else
+            {params.script} \\
+                -m {params.numbergenomes} \\
+                -i {input.clustercsv} \\
+                -o {output.output_csv} \\
+                -vvv
+        fi
+        """
+
+
+rule downsample_df:
     output:
         output_csv=fn_downsampled_df("{batch}", "{genebatch}", "{passinggene}"),
+    input:
+        clustercsv=fn_cluster_csv("{batch}", "{genebatch}", "{passinggene}"),
+        fof=fn_fof("{batch}"),
     conda:
         "../envs/pandas.yml"
     params:
@@ -42,14 +85,14 @@ rule downsample_df:
 
 
 rule downsample_annotdf:
-    input:
-        prevdownsampled_df=fn_downsampled_df("{batch}", "{genebatch}", "{passinggene}"),
     output:
         downsampled_annot_df=fn_downsampled_annot_df(
             "{batch}", "{genebatch}", "{passinggene}"
         ),
+    input:
+        prevdownsampled_df=fn_downsampled_df("{batch}", "{genebatch}", "{passinggene}"),
     conda:
-        "../envs/ete3.yml"
+        "../envs/ete4.yml"
     params:
         numbergenomes=config["number_annotate"],
         metadata661k=f"{dir_intermediate()}"
@@ -75,4 +118,18 @@ rule downsample_annotdf:
         # Concatenate all the sampled files into one CSV
         csvtk concat $(dirname {output})/tmp_clusters/*.csv_sample | gzip - > {output}
         rm -rf $(dirname {output})/tmp_clusters
+        """
+
+
+rule downsample_clusterzerodf:
+    input:
+        clustercsv=fn_cluster_csv("{batch}", "{genebatch}", "{passinggene}"),
+    output:
+        output_csv=fn_clusterzero_csv("{batch}", "{genebatch}", "{passinggene}"),
+    conda:
+        "../envs/bwamem.yml"
+    shell:
+        """
+        mkdir -p $(dirname {output})
+        zcat {input.clustercsv} | csvtk filter -f Cluster=0 | gzip - > {output}
         """

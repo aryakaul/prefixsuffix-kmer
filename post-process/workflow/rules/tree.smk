@@ -1,18 +1,17 @@
 rule build_sketched_tree:
     output:
         tree_newick=fn_downsample_nwk("{batch}", "{genebatch}", "{passinggene}"),
-        filelist=fn_decompgenome_list("{batch}", "{genebatch}", "{passinggene}"),
     input:
         chkpntaggregate_genomefasta_dir,
+        filelist=fn_decompgenome_list("{batch}", "{genebatch}", "{passinggene}"),
     conda:
         "../envs/attotree.yml"
     shell:
         """
-        for i in {input}/*.fa; do echo $i; done > {output.filelist} 
-
         attotree \\
-            -L {output.filelist} \\
-            -o {output.tree_newick}
+            -L {input.filelist} \\
+            -o {output.tree_newick} \\
+            -D
         """
 
 
@@ -53,7 +52,7 @@ rule minimal_cuts:
         tree=fn_itoltree("{batch}", "{genebatch}", "{passinggene}"),
         csv=fn_downsampled_df("{batch}", "{genebatch}", "{passinggene}"),
     conda:
-        "../envs/ete3.yml"
+        "../envs/ete4.yml"
     params:
         script=Path(workflow.basedir) / "scripts/minimal_cuts",
     shell:

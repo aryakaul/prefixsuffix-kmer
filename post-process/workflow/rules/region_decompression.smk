@@ -1,11 +1,11 @@
 checkpoint region_decompression:
     input:
-        downsamplecsv=fn_downsampled_df("{batch}", "{genebatch}", "{passinggene}"),
+        clusterzero=fn_clusterzero_csv("{batch}", "{genebatch}", "{passinggene}"),
         fof=fn_fof("{batch}"),
     output:
         directory(
             f"{dir_intermediate()}"
-            + "/decompressed_regions/{batch}/{genebatch}/{passinggene}"
+            + "/decompressed_regions/clusterzero/{batch}/{genebatch}/{passinggene}"
         ),
     conda:
         "../envs/biopython.yml"
@@ -16,7 +16,7 @@ checkpoint region_decompression:
     shell:
         """
         {params.script} \\
-            -i {input.downsamplecsv} \\
+            -i {input.clusterzero} \\
             -f {input.fof} \\
             -e {output} \\
             -w {params.windowsize} \\
@@ -50,8 +50,8 @@ rule aggregate_regionalfastas:
     output:
         fn_decompregion_agg("{batch}", "{genebatch}", "{passinggene}"),
     input:
-        #chkpntaggregate_regionalfastas,
-        chkpntaggregate_blastouts,
+        chkpntaggregate_regionalfastas,
+        #chkpntaggregate_blastouts,
         #fn_blastouts("{batch}", "{genebatch}", "{passinggene}"),
         #expand(
         #fn_blastrawout("{batch}", "{genebatch}", "{passinggene}", "{contig}"),
