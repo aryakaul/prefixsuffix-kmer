@@ -1,11 +1,16 @@
-# Kmer-based rapid gene fusion identification
+# Prefix-Suffix K-mer Matching
 
 <p>
-Workflow for identifying putative gene fusion events through rapid k-mer matching. 
-   
+A scalable workflow for detecting differential genomic distances through rapid k-mer matching. Query sequences are analyzed by extracting prefix and suffix k-mers, which are then mapped across large genome collections to identify regions with unexpected distances between sequence boundaries.
+
 [![Tests](https://github.com/aryakaul/prefixsuffix-kmer/actions/workflows/main.yaml/badge.svg)](https://github.com/aryakaul/prefixsuffix-kmer/actions/workflows/main.yaml)
+
 <!--For more information, see the <a href="LOLSOON">associated paper</a>.-->
 </p><br/>
+
+<p align="center">
+  <img src="assets/prefixsuffixapproach.png" alt="Prefix-Suffix K-mer Matching Approach" width="800"/>
+</p>
 
 <h2>Contents</h2>
 
@@ -30,14 +35,23 @@ Workflow for identifying putative gene fusion events through rapid k-mer matchin
 
 ## 1. Introduction
 
-The user provides files of files for genomes in the `input/` directory, in addition, the user provides fasta files corresponding to 
-the genes they would like to query in the `input/` directory. 
+This workflow implements a scalable k-mer based approach for detecting differential distances in genomic sequences across massive genome collections. The method extracts prefix and suffix k-mers from query sequences and maps them to genome databases using BWA FastMap. By comparing the observed distances between k-mer pairs to their expected distances in the original query sequence, the pipeline identifies regions where sequence boundaries differ.
 
-The genome batches should have the extension `.txt` and the gene fasta files should have the extension `.ffn`.
+The approach scales to very large databases. In the associated paper, we apply it to [AllTheBacteria](https://allthebacteria.org/) (2.4M+ uniformly QC'd bacterial isolate genomes), the most comprehensive bacterial isolate genome collection to date. However, the method is generalizable to other data collections, including metagenomic sequences.
 
-The user can specify the requested k-mer length in the
-[configuration file](config.yaml). By running `make`, the pipeline queries if any of the input genes have evidence of being the result
-of gene fusion within the provided genomes. 
+### How it works
+
+Users provide:
+1. **Genome collections** as files-of-files (`.txt`) in the `input/` directory, pointing to tar.xz compressed genome batches
+2. **Query sequences** as FASTA files (`.ffn`) representing the sequences to search for
+
+The workflow then:
+1. Extracts prefix and suffix k-mers from each query sequence (configurable k-mer length and gap distance)
+2. Maps these k-mers to genome collections using BWA FastMap
+3. Calculates distances between prefix-suffix pairs within each genome
+4. Compares observed distances to the expected distance in the original query sequence
+5. Clusters genomes by similar distance patterns using DBSCAN
+6. Identifies sequences showing differential distances across the genome collection 
 
 ## 2. Dependencies
 
@@ -177,7 +191,7 @@ Tests can be run by `make test`.
 
 ## 5. Citation
 
-TODO
+If you use this workflow in your research, please cite the associated paper (preprint forthcoming).
 
 
 ## 6. Issues
