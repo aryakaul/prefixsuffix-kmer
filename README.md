@@ -37,7 +37,7 @@ A scalable workflow for detecting differential genomic distances through rapid k
 
 This workflow implements a scalable k-mer based approach for detecting differential distances in genomic sequences across massive genome collections. The method extracts prefix and suffix k-mers from query sequences and maps them to genome databases using BWA FastMap. By comparing the observed distances between k-mer pairs to their expected distances in the original query sequence, the pipeline identifies regions where sequence boundaries differ.
 
-The approach scales to very large databases. In the associated paper, we apply it to [AllTheBacteria](https://allthebacteria.org/) (2.4M+ uniformly QC'd bacterial isolate genomes), the most comprehensive bacterial isolate genome collection to date. However, the method is generalizable to other data collections, including metagenomic sequences.
+The approach scales to very large databases. In the paper where we introduce it, we first apply it to [AllTheBacteria](https://allthebacteria.org/) (2.4M+ uniformly QC'd bacterial isolate genomes); however, you can supply any sequence data (i.e. metagenomic sequences)
 
 ### How it works
 
@@ -47,7 +47,7 @@ Users provide:
 
 The workflow then:
 1. Extracts prefix and suffix k-mers from each query sequence (configurable k-mer length and gap distance)
-2. Maps these k-mers to genome collections using BWA FastMap
+2. Maps these k-mers to genome collections using BWA fastmap
 3. Calculates distances between prefix-suffix pairs within each genome
 4. Compares observed distances to the expected distance in the original query sequence
 5. Clusters genomes by similar distance patterns using DBSCAN
