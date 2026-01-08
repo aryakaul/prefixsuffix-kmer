@@ -191,8 +191,7 @@ Tests can be run by `make test`.
 
 ## 5. Citation
 
-If you use this workflow in your research, please cite the associated paper (preprint forthcoming).
-
+If you use this workflow, please cite: [Novel genes arise from genomic deletions across the bacterial tree of life](https://www.biorxiv.org/content/10.64898/2026.01.05.697752v1)
 
 ## 6. Issues
 
