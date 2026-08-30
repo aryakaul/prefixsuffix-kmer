@@ -3,9 +3,7 @@
 <p>
 A scalable workflow for detecting differential genomic distances through rapid k-mer matching. Query sequences are analyzed by extracting prefix and suffix k-mers, which are then mapped across large genome collections to identify regions with unexpected distances between sequence boundaries.
 
-<!--[![Tests](https://github.com/aryakaul/prefixsuffix-kmer/actions/workflows/main.yaml/badge.svg)](https://github.com/aryakaul/prefixsuffix-kmer/actions/workflows/main.yaml)-->
-
-<!--For more information, see the <a href="LOLSOON">associated paper</a>.-->
+For more information, see the associated preprint: <a href="https://www.biorxiv.org/content/10.64898/2026.01.05.697752v1">Novel genes arise from genomic deletions across the bacterial tree of life</a>.
 </p><br/>
 
 <p align="center">
@@ -57,13 +55,13 @@ The workflow then:
 
 * [Conda](https://docs.conda.io/en/latest/miniconda.html) (unless the use of Conda is switched off in the configuration) and ideally also [Mamba](https://mamba.readthedocs.io/) (>= 0.20.0)
 * [GNU Make](https://www.gnu.org/software/make/)
-* [Python](https://www.python.org/) (>=3.7)
-* [Snakemake](https://snakemake.github.io) (>=6.2.0)
+* [Python](https://www.python.org/) (>=3.11)
+* [Snakemake](https://snakemake.github.io) (>=8.0.0)
 
 These can be installed by Conda by
 ```bash
-bash conda install -c conda-forge -c bioconda -c defaults \
-  make "python>=3.7" "snakemake>=6.2.0" "mamba>=0.20.0"
+conda install -c conda-forge -c bioconda -c defaults \
+  make "python>=3.11" "snakemake>=8.0.0" "mamba>=0.20.0"
 ```
 
 Other dependencies are installed automatically by
@@ -107,7 +105,8 @@ curl -L https://github.com/aryakaul/prefixsuffix-kmer/tarball/main \
 
   Such a list can be generated, for instance, by `find` by
   ```bash
-  $ find ~/dir_with_my_genomes -name '*.tar.gz' > input/my_first_batch.txt
+  $ mkdir -p input
+  $ find ~/dir_with_my_genomes -name '*.tar.xz' > input/my_first_batch.txt
   ```
   The supported input file format is a collection of .fa files tar.xz compressed. For
   example,
